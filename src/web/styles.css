@@ -84,7 +84,7 @@ a { color: inherit; }
 .quiz-controls { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .theme-btn { min-width: 84px; font-size: 13px; color: var(--muted); }
 .theme-btn:hover { color: var(--text); }
-.counter { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.counter { font-family: var(--mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
 .counter b { color: var(--text); }
 
 .clock {
@@ -598,6 +598,13 @@ h2.qtext { font-size: clamp(1.25rem, 2.6vw, 1.7rem); letter-spacing: -0.01em; li
   .choice .votes { white-space: nowrap; }
   .evidence li { grid-template-columns: 44px minmax(0, 1fr); }
   .ev-text { grid-column: 1 / -1; }
-  .topbar-inner { gap: 10px; }
-  .quiz-controls { gap: 6px; flex-wrap: wrap; }
+  /* Two rows: brand + theme, then the quiz controls on one line of their own. */
+  .topbar-inner { flex-wrap: wrap; gap: 8px 10px; padding: 8px 0; }
+  .topbar .brand { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-inner > .spacer { display: none; }
+  .quiz-controls { order: 3; flex: 1 0 100%; gap: 5px; }
+  .quiz-controls > :not(.spacer) { flex-shrink: 0; }
+  .quiz-controls .btn { padding: 6px 7px; font-size: 12px; white-space: nowrap; }
+  .clock { min-width: 0; padding: 3px 6px; font-size: 13px; }
+  .theme-btn { min-width: 0; padding: 6px 10px; }
 }
