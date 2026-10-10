@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "",
+  "outputDirectory": "src/web",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 300,
+      "includeFiles": "src/exam_practice/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/exams/(.*)", "destination": "/api/index" }
+  ]
+}

@@ -1,0 +1,8 @@
+# Never upload the local login or crawled data; hosted exams live in Vercel Blob.
+cookies.txt
+exams/
+.venv/
+node_modules/
+tests/
+.pytest_cache/
+*.log
