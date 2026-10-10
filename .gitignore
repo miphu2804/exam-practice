@@ -1,0 +1,35 @@
+# Login session for FuOverflow.
+cookies.txt
+
+# Per-exam raw HTML dumps (re-fetchable) and downloaded images.
+exams/*/raw/
+exams/*/images/
+
+# Generated from exam.json; rebuilt by crawl.py.
+exams/index.json
+exams/index.js
+
+# Per-exam crawl output. Images are ignored too, so a clone must crawl its own
+# thread (exams/registry.json keeps the folder, which the server mounts).
+exams/*/exam.json
+exams/*/data.json
+exams/*/data.js
+
+# Frontend dev server (Vite)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Local server / cron logs
+.server.log
+.sync.log
+
+# Scratch
+.scratch/
