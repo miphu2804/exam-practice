@@ -20,10 +20,10 @@ FuOverflow thread ──crawler.py/fetch.py──▶ exams/<code>/raw/   (HTML t
                                               ▼
                      exams/<code>/data.json · data.js · exam.json  +  exams/index.json
                                               │
-             server.py (FastAPI) phục vụ /exams + /api ──▶ src/web/app.js (vanilla JS)
+             main.py + exams/router.py (FastAPI) phục vụ /exams + /api ──▶ src/web/app.js (vanilla JS)
 ```
 
-- Mọi thứ mạng nằm ở `fetch.py`, `crawler.py`, `server.py`, `blobstore.py`.
+- Mọi thứ gọi mạng nằm ở `fetch.py`, `crawler.py`, `exams/blob_storage.py`; HTTP vào nằm ở `exams/router.py`.
   `parse.py`/`build.py` chạy lại được trên `raw/` không cần mạng (`--rebuild`).
 - Web không có build step; Vite chỉ là dev server proxy `/api` + `/exams`.
 - Không có dữ liệu mẫu trong git: mọi đề là bản crawl thật, test tự sinh fixture.

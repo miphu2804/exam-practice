@@ -16,7 +16,7 @@ Các file liên quan:
   (CDN phục vụ web), function `api/index.py` (`maxDuration: 300`, kèm `src/exam_practice/**`),
   rewrite `/api/*` và `/exams/*` về function.
 - `api/index.py` — thêm `src` vào `sys.path`, export `app`.
-- `.vercelignore` — loại `cookies.txt`, `exams/`, `.venv/`, `node_modules/`, `tests/`.
+- `.vercelignore` — loại `cookies.txt`, `.env`, `exams/`, `.venv/`, `node_modules/`, `tests/`, cache và log.
 - Phụ thuộc Python lấy từ `pyproject.toml`/`uv.lock` (gói `vercel` cho Blob SDK).
 
 Lần đầu:
@@ -27,16 +27,20 @@ npx vercel blob create-store exam-practice --access public --yes   # tự thêm 
 npx vercel deploy --prod
 ```
 
+Cấu hình chỉ đọc từ biến môi trường (`app_config.py`, pydantic-settings); không có file
+`.env`. Local không cần biến nào vì mọi biến đều có mặc định, nên `./dev.sh` chạy được ngay.
+
 | Biến | Ý nghĩa |
 |---|---|
 | `BLOB_READ_WRITE_TOKEN` | Có → chế độ hosted. Store id là trường thứ 4 (tách `_`) của token, dùng dựng URL public |
+| `LOG__LEVEL` | Mức log của `logging` (mặc định `INFO`: bắt đầu/xong crawl, báo cáo build, traceback khi lỗi 500) |
 | `VERCEL` | Vercel tự đặt → `paths.EXAMS = /tmp/exams` |
 
 ## Giới hạn khi hosted (biết trước, chưa xử lý)
 
 - Ảnh đề trên Blob là **public** (ai có URL đều xem được).
 - Crawl lại ghi đè cùng đường dẫn; CDN của Blob có thể trả bản cũ tối đa 60 s
-  (`blobstore.MAX_AGE_SECONDS`).
+  (`MAX_AGE_SECONDS` trong `exams/blob_storage.py`).
 - Hai crawl cùng một thread trên cùng instance cùng lúc có thể giẫm nhau trong `/tmp`.
 - FuOverflow có thể chặn IP của Vercel; khi đó crawl local rồi chạy `--sync` từ máy.
 - Không có đổi tên/xóa trên web; dọn Blob bằng dashboard Vercel hoặc `npx vercel blob`.

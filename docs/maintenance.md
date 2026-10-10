@@ -12,7 +12,8 @@ uv run pytest -q --ignore tests/test_web_e2e.py    # chỉ unit, nhanh
 | `test_parse.py` | Cú pháp bình luận, luật đối chiếu, evidence/excerpt |
 | `test_build.py` | manifest → `data.json`, `view`, index |
 | `test_registry.py`, `test_catalog.py` | Sổ đề, đổi tên/xóa |
-| `test_server.py` | API local + hosted (Blob được thay bằng fake) |
+| `test_app_config.py` | `AppConfig`: mặc định local/`INFO`, `BLOB_READ_WRITE_TOKEN` bật hosted, `LOG__LEVEL` đọc từ môi trường |
+| `test_server.py` | API local + hosted (Blob được thay bằng cách monkeypatch `BlobExamStorage`) |
 | `test_web_e2e.py` | Playwright + Chrome cài sẵn: tự sinh đề giả (`write_exam`) rồi bấm thật |
 
 E2E cần Google Chrome trên máy. Thêm trường dữ liệu mới thì cập nhật `write_exam`

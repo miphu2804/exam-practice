@@ -7,7 +7,7 @@
 
 Một lệnh crawl (`uv run crawl.py <thread-url>`) tải ảnh đề + bình luận, tự đối
 chiếu đáp án theo bình chọn nhiều nhất, ghi `exams/<code>/`, cập nhật index. Web
-tĩnh trong `src/web/` để làm bài; backend FastAPI (`server.py`) có `POST /api/crawl`
+tĩnh trong `src/web/` để làm bài; backend FastAPI (`main.py`) có `POST /api/crawl`
 cho ô crawl đề. Không có dữ liệu mẫu: mọi đề là bản crawl thật.
 
 ## Lệnh
@@ -27,7 +27,7 @@ uv run pytest -q --ignore tests/test_web_e2e.py   # chỉ unit, nhanh
 
 ## Quy ước
 
-- I/O nằm ở `fetch.py`, `crawler.py`, `blobstore.py` và `server.py` (local chỉ nghe 127.0.0.1;
+- I/O nằm ở `fetch.py`, `crawler.py`, `exams/blob_storage.py`, `exams/local_storage.py`, `main.py` + `exams/router.py` (local chỉ nghe 127.0.0.1;
   có `BLOB_READ_WRITE_TOKEN` là chế độ hosted Vercel: cookie bắt buộc từ người dùng, đề trong Blob, cấm đổi tên/xóa); `parse.py` và `build.py` thuần/không mạng
   để chạy lại trên raw và test bằng fixture.
 - Web tĩnh, không build step (Vite chỉ là dev server, proxy `/api` + `/exams`); ảnh tham chiếu bằng đường dẫn tương đối từ

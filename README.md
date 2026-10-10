@@ -25,7 +25,7 @@ uv run crawl.py https://fuoverflow.com/threads/hcm202-q2-6.2757/
 `dev.sh` vào gốc dự án, `uv sync`, `npm install` nếu chưa có `node_modules`, rồi
 chạy song song hai tiến trình (Ctrl+C dừng cả hai, không để sót tiến trình):
 
-- backend: `uvicorn exam_practice.server:app --reload` (FastAPI, chỉ reload khi sửa
+- backend: `uvicorn exam_practice.main:app --reload` (FastAPI, chỉ reload khi sửa
   `src/exam_practice/`, không reload khi crawl ghi vào `exams/`).
 - frontend: `vite` (Vite, root `src/web/`, live reload khi sửa HTML/CSS/JS);
   Vite proxy `/api` và `/exams` sang backend.
@@ -176,7 +176,15 @@ uv run crawl.py --list
 crawl.py                       lệnh tiện dụng -> exam_practice.cli
 src/exam_practice/
   cli.py                       tham số dòng lệnh + mode (crawl/register/sync/rebuild/serve)
-  server.py                    FastAPI: crawl, đổi tên, xóa đề + phục vụ exams/ và web
+  main.py                      composition root: create_app, phục vụ exams/ và web (local)
+  app_config.py                cấu hình từ biến môi trường (BLOB_READ_WRITE_TOKEN, LOG__LEVEL)
+  exams/
+    router.py                  route /api/* (crawl, đổi tên, xóa, health) và /exams/* khi hosted
+    exam_service.py            quy trình crawl / đổi tên / xóa, dùng chung cho mọi storage
+    storage.py                 Protocol ExamStorage (Strategy)
+    local_storage.py           lưu đề trên đĩa: exams/, registry.json, index, khóa crawl
+    blob_storage.py            hosted: đẩy đề lên Vercel Blob, liệt kê index
+    schema.py, errors.py       model request/response, lỗi nghiệp vụ
   catalog.py                   đổi tên / xóa đề (thư mục, manifest, sổ, index)
   crawler.py                   tải thread + media + ảnh vào exams/<code>/
   registry.py                  đọc/ghi exams/registry.json
