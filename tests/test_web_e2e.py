@@ -526,8 +526,15 @@ def test_notes_per_question_persist_and_list_on_notes_screen(page):
 
 def test_hosted_picker_asks_for_cookie_and_hides_destructive_actions(browser, exams, monkeypatch):
     monkeypatch.setattr(BlobExamStorage, "index", lambda self: json.loads((exams / "index.json").read_text()))
+    monkeypatch.setattr(BlobExamStorage, "save", lambda self, entry, data: None)
+    cookies = []
+
+    def fake_crawl(entry, cookie, progress):
+        cookies.append(cookie)
+        return {"code": "x", "title": "X", "stats": {}}
+
     port = free_port()
-    uv = uvicorn.Server(uvicorn.Config(main.create_app(HOSTED, lambda entry, cookies: {}), host="127.0.0.1", port=port, log_level="warning"))
+    uv = uvicorn.Server(uvicorn.Config(main.create_app(HOSTED, fake_crawl), host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=uv.run, daemon=True)
     thread.start()
     while not uv.started:
@@ -544,6 +551,15 @@ def test_hosted_picker_asks_for_cookie_and_hides_destructive_actions(browser, ex
         expect(tab.locator("[data-act=delete]")).to_have_count(0)
         expect(tab.locator("#crawl input[name=cookie]")).to_be_visible()
         expect(tab.locator("#crawl input[name=cookie]")).to_have_attribute("required", "")
+
+        # A successful crawl remembers the cookie, so the next one only needs the link.
+        tab.fill("#crawl input[name=url]", "https://fuoverflow.com/threads/x.1/")
+        tab.fill("#crawl input[name=cookie]", "my-xf-user")
+        tab.click("#crawl button[type=submit]")
+        expect(tab.locator("#crawl-status")).to_be_hidden()
+        tab.reload()
+        expect(tab.locator("#crawl input[name=cookie]")).to_have_value("my-xf-user")
+        assert cookies == [{"xf_user": "my-xf-user"}]
     finally:
         context.close()
         uv.should_exit = True

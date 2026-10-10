@@ -446,9 +446,10 @@
     // Hosted: the server has no login of its own, so each user crawls with their own cookie.
     const cookie = state.hosted
       ? `<div class="crawl-row">
-          <input name="cookie" type="password" autocomplete="off" required placeholder="Cookie xf_user FuOverflow của bạn" aria-label="Cookie xf_user" />
+          <input name="cookie" type="password" autocomplete="off" required placeholder="Cookie xf_user FuOverflow của bạn" aria-label="Cookie xf_user" value="${esc(savedCookie())}" />
         </div>
-        <p class="crawl-hint">Lấy cookie: đăng nhập fuoverflow.com → DevTools (F12) → Application → Cookies → copy giá trị <code>xf_user</code>. Cookie chỉ dùng cho lượt crawl này, không được lưu.</p>`
+        <label class="crawl-remember"><input type="checkbox" name="remember" checked /> Nhớ cookie trên trình duyệt này để lần sau chỉ cần dán link</label>
+        <p class="crawl-hint">Lấy cookie: đăng nhập fuoverflow.com → DevTools (F12) → Application → Cookies → copy giá trị <code>xf_user</code>. Server chỉ dùng cookie cho lượt crawl, không lưu; nếu chọn nhớ thì cookie nằm trong trình duyệt của bạn.</p>`
       : "";
     const localCookie = state.hosted
       ? ""
@@ -479,6 +480,17 @@
       </form>`;
   }
 
+  // The visitor's FuOverflow login, kept only in this browser when they tick "Nhớ cookie".
+  const COOKIE = "fuoverflow:cookie";
+
+  function savedCookie() {
+    try { return localStorage.getItem(COOKIE) || ""; } catch { return ""; }
+  }
+
+  function rememberCookie(value) {
+    try { value ? localStorage.setItem(COOKIE, value) : localStorage.removeItem(COOKIE); } catch { /* private mode */ }
+  }
+
   async function submitCrawl(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -504,6 +516,7 @@
         status.textContent = `${event.label} · ${Math.round((event.done / (event.total || 1)) * 100)}%`;
       });
       bar.value = bar.max;
+      if (form.elements.remember) rememberCookie(form.elements.remember.checked ? body.cookie : "");
       status.textContent = "Đang đối chiếu đáp án và lưu đề…";
       await loadIndex();
       const entry = state.index.find((e) => e.code === result.code);

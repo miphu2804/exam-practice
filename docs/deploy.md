@@ -19,6 +19,9 @@ Các file liên quan:
 - `.vercelignore` — loại `cookies.txt`, `.env`, `exams/`, `.venv/`, `node_modules/`, `tests/`, cache và log.
 - Phụ thuộc Python lấy từ `pyproject.toml`/`uv.lock` (gói `vercel` cho Blob SDK).
 
+Project `exam-practice` đã nối repo GitHub: push lên `main` tự deploy production, nhánh
+khác thành preview. Vercel Authentication đã tắt (ai cũng mở được, kể cả preview).
+
 Lần đầu:
 
 ```bash

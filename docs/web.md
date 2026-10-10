@@ -59,6 +59,9 @@ gốc) và đánh số lại `n = 1..N`. Vì thế **luôn dùng helper**, đừ
   lại hoặc luyện.
 - **Crawl** (`submitCrawl` → `streamCrawl`): đọc NDJSON từ `/api/crawl/stream`, cập nhật
   `<progress id="crawl-progress">` (chưa biết tổng thì ở trạng thái indeterminate).
+- **Cookie (hosted)**: ô "Nhớ cookie" (mặc định bật) lưu `xf_user` ở
+  `localStorage["fuoverflow:cookie"]` sau một lần crawl thành công và điền sẵn lần sau; bỏ
+  chọn rồi crawl thì xoá. Server không lưu cookie.
 - **Theme**: `localStorage.theme` ∈ `"" | "light" | "dark"`; `applyTheme` đặt
   `data-theme` trên `<html>`. Mọi truy cập storage đều bọc `try` (chế độ riêng tư).
 
