@@ -108,6 +108,15 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Theme sáng/tối, trộn đề, xáo câu, evidence + docs/ (2026-10-10):** token CSS
+  dùng `light-dark()` (Tự động/Sáng/Tối, nút theme luôn trên header, bỏ gradient nền);
+  **Trộn đề** ở kho đề (chọn ≥ 2 đề + số câu, câu mang `code`/`orig`, đánh số lại);
+  chip **Thứ tự câu: Theo đề / Xáo trộn**; `Vote.text` + `Answer.evidence` →
+  `evidence` trong `data.json`, web hiện "Bình luận đối chiếu · X/Y khớp" (tự mở khi
+  tranh chấp). Đề cũ đã `--rebuild`. Thêm `docs/` cho người maintain (kiến trúc,
+  pipeline, web, deploy, bảo trì). Kiểm chứng: test parse evidence + 3 E2E mới;
+  ảnh chụp sáng/tối kho đề, màn bắt đầu, làm bài.
+
 ## QA round (reviewer, opencode-go/glm-5.3:high)
 
 Đã sửa theo kết quả QA:
