@@ -174,7 +174,7 @@ def _rebuild(args: argparse.Namespace) -> None:
 def _serve(args: argparse.Namespace) -> None:
     import uvicorn
 
-    uvicorn.run("exam_practice.server:app", host="127.0.0.1", port=args.port)
+    uvicorn.run("exam_practice.main:app", host="127.0.0.1", port=args.port)
 
 
 def _hint(data: dict) -> None:

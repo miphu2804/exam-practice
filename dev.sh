@@ -27,7 +27,7 @@ uv sync --quiet
 
 # Run the binaries directly (not via uv run / npm run) so the PIDs below are the
 # servers themselves and the trap stops them without leaving orphans.
-.venv/bin/uvicorn exam_practice.server:app --host 127.0.0.1 --port "$API_PORT" \
+.venv/bin/uvicorn exam_practice.main:app --host 127.0.0.1 --port "$API_PORT" \
   --reload --reload-dir src/exam_practice &
 api=$!
 node_modules/.bin/vite &

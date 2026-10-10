@@ -14,13 +14,17 @@ import pytest
 import uvicorn
 from PIL import Image, ImageDraw
 
-from exam_practice import build, paths, server
+from exam_practice import build, main, paths
+from exam_practice.app_config import AppConfig
+from exam_practice.exams.blob_storage import BlobExamStorage
 from exam_practice.fetch import LoginRequired
 
 playwright = pytest.importorskip("playwright.sync_api")
 expect = playwright.expect
 
 THREAD = "https://fuoverflow.com/threads/demo.1/"
+LOCAL = AppConfig(_env_file=None, blob_read_write_token=None)
+HOSTED = AppConfig(_env_file=None, blob_read_write_token="vercel_blob_rw_StoreAbc_secret")
 # n, answer, votes; question 3 takes two answers, question 4 has no answer key.
 QUESTIONS = [(1, ["A"], {"A": 5, "B": 1}), (2, ["C"], {"C": 4}), (3, ["B", "D"], {"B": 3, "D": 3}), (4, [], {})]
 
@@ -43,6 +47,10 @@ def browser():
 def exams(tmp_path, monkeypatch):
     root = tmp_path / "exams"
     monkeypatch.setattr(paths, "EXAMS", root)
+    monkeypatch.setattr(paths, "REGISTRY", root / "registry.json")
+    cookie_file = tmp_path / "cookies.txt"
+    cookie_file.write_text("fuoverflow.com\tTRUE\t/\tTRUE\t0\txf_user\tabc\n", encoding="utf-8")
+    monkeypatch.setattr(paths, "COOKIES", cookie_file)
     write_exam(root, "demo", "Demo exam", QUESTIONS)
     build.write_index(root)
     return root
@@ -50,22 +58,22 @@ def exams(tmp_path, monkeypatch):
 
 @pytest.fixture
 def crawls(exams):
-    """Requests the fake crawl received; a URL containing ``login`` fails like an expired cookie."""
+    """(entry, cookies) pairs the fake crawl received; a URL containing ``login`` fails like an expired cookie."""
     return []
 
 
 @pytest.fixture
 def site(exams, crawls):
-    def fake_crawl(request):
-        crawls.append(request)
-        if "login" in request["url"]:
+    def fake_crawl(entry, cookies):
+        crawls.append((entry, cookies))
+        if "login" in entry["url"]:
             raise LoginRequired("cookie hết hạn")
-        data = write_exam(exams, "new-exam", request["name"] or "new-exam", QUESTIONS[:1], request["minutes"] or 45)
+        data = write_exam(exams, "new-exam", entry["name"] or "new-exam", QUESTIONS[:1], entry["minutes"] or 45)
         build.write_index(exams)
         return data
 
     port = free_port()
-    uv = uvicorn.Server(uvicorn.Config(server.create_app(fake_crawl), host="127.0.0.1", port=port, log_level="warning"))
+    uv = uvicorn.Server(uvicorn.Config(main.create_app(LOCAL, fake_crawl), host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=uv.run, daemon=True)
     thread.start()
     while not uv.started:
@@ -180,7 +188,7 @@ def test_crawl_form_reports_bad_link_and_login_errors(page, crawls):
     page.click("#crawl button[type=submit]")
     expect(status).to_have_text("cookie hết hạn")
     expect(page.locator("#crawl button[type=submit]")).to_be_enabled()
-    assert [r["url"] for r in crawls] == ["https://fuoverflow.com/threads/login.2/"]
+    assert [entry["url"] for entry, _ in crawls] == ["https://fuoverflow.com/threads/login.2/"]
 
 
 def test_crawl_form_adds_exam_and_opens_it(page, crawls):
@@ -193,7 +201,9 @@ def test_crawl_form_adds_exam_and_opens_it(page, crawls):
 
     expect(page.locator(".start h1")).to_have_text("Đề mới")
     expect(page.locator("#minutes")).to_have_value("30")
-    assert crawls == [{"url": "https://fuoverflow.com/threads/new-exam.9/", "name": "Đề mới", "minutes": 30, "cookie": "secret-xf-user"}]
+    assert crawls == [
+        ({"code": "new-exam", "name": "Đề mới", "url": "https://fuoverflow.com/threads/new-exam.9/", "minutes": 30}, {"xf_user": "secret-xf-user"})
+    ]
 
     page.click("#back")
     expect(page.locator(".exam-card")).to_have_count(2)
@@ -495,9 +505,9 @@ def test_notes_per_question_persist_and_list_on_notes_screen(page):
 
 
 def test_hosted_picker_asks_for_cookie_and_hides_destructive_actions(browser, exams, monkeypatch):
-    monkeypatch.setattr(server.blobstore, "index", lambda: json.loads((exams / "index.json").read_text()))
+    monkeypatch.setattr(BlobExamStorage, "index", lambda self: json.loads((exams / "index.json").read_text()))
     port = free_port()
-    uv = uvicorn.Server(uvicorn.Config(server.create_app(lambda r: {}, hosted=True), host="127.0.0.1", port=port, log_level="warning"))
+    uv = uvicorn.Server(uvicorn.Config(main.create_app(HOSTED, lambda entry, cookies: {}), host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=uv.run, daemon=True)
     thread.start()
     while not uv.started:
