@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
@@ -215,6 +215,8 @@ class Vote:
     question: int
     author: str
     letters: frozenset[str]
+    # The comment words behind the vote, shown as evidence next to the answer key.
+    text: str = field(default="", compare=False)
 
 
 @dataclass
@@ -225,6 +227,7 @@ class Answer:
     vote_count: int
     multi: bool
     contested: bool
+    evidence: list[Vote] = field(default_factory=list)
 
 
 def extract_entries(text: str) -> dict[int, set[str]]:
@@ -263,7 +266,7 @@ def collect_votes(comments: list[Comment], page_question: int | None) -> list[Vo
         entries = extract_entries(comment.text)
         if entries:
             votes.extend(
-                Vote(n, comment.author, frozenset(letters))
+                Vote(n, comment.author, frozenset(letters), excerpt(comment.text, n))
                 for n, letters in entries.items()
                 if letters
             )
@@ -273,8 +276,22 @@ def collect_votes(comments: list[Comment], page_question: int | None) -> list[Vo
         bare = extract_bare(comment.text)
         reference = question_reference(comment.text)
         if bare and reference in (None, page_question):
-            votes.append(Vote(page_question, comment.author, frozenset(bare)))
+            votes.append(Vote(page_question, comment.author, frozenset(bare), comment.text))
     return votes
+
+
+EXCERPT_CHARS = 140
+
+
+def excerpt(text: str, question: int) -> str:
+    """The part of a comment that answers ``question``; long answer lists are cut around it."""
+    if len(text) <= EXCERPT_CHARS:
+        return text
+    for match in _ENTRY_RE.finditer(text):
+        if int(match.group(1)) == question:
+            start, end = max(0, match.start() - 40), min(len(text), match.end() + 40)
+            return f"{'…' if start else ''}{text[start:end].strip()}{'…' if end < len(text) else ''}"
+    return text[:EXCERPT_CHARS] + "…"
 
 
 def resolve_answers(votes: list[Vote], total: int) -> dict[int, Answer]:
@@ -311,5 +328,6 @@ def resolve_answers(votes: list[Vote], total: int) -> dict[int, Answer]:
             vote_count=sum(counts.values()),
             multi=len(winner) > 1,
             contested=runner_up * 4 >= wins * 3,
+            evidence=[vote for vote in unique.values() if vote.question == q],
         )
     return answers

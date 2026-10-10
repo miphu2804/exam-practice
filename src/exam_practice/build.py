@@ -147,6 +147,9 @@ def _question(number: int, answer, attachment: dict | None, fallback_source: str
         "contested": answer.contested,
         "letter_votes": answer.letter_counts,
         "vote_count": answer.vote_count,
+        "evidence": [
+            {"author": vote.author, "letters": sorted(vote.letters), "text": vote.text} for vote in answer.evidence
+        ],
     }
 
 

@@ -207,3 +207,14 @@ def test_resolve_answers_contested_and_empty():
     assert answers[1].contested is True
     assert answers[2].letters == []
     assert answers[2].contested is True
+
+
+def test_votes_keep_their_comment_as_evidence():
+    from exam_practice.parse import Comment, collect_votes, resolve_answers
+
+    long_list = "Đáp án của mình: " + " ".join(f"{n}A" for n in range(1, 40)) + " hết"
+    votes = collect_votes([Comment("an", "B nhé"), Comment("binh", long_list)], page_question=7)
+    answers = resolve_answers(votes, 30)
+    assert [(v.author, v.text) for v in answers[7].evidence][0] == ("an", "B nhé")
+    cut = answers[30].evidence[0].text  # long list: only the words around "30A"
+    assert "30A" in cut and cut.startswith("…") and len(cut) < len(long_list)
