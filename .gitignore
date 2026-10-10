@@ -36,3 +36,5 @@ __pycache__/
 
 # Local environment overrides (secrets such as the Blob token).
 .env
+.vercel
+.env*

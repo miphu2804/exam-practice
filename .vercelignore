@@ -1,6 +1,6 @@
 # Never upload the local login or crawled data; hosted exams live in Vercel Blob.
 cookies.txt
-exams/
+/exams/
 .venv/
 node_modules/
 tests/
@@ -8,4 +8,4 @@ tests/
 *.log
 
 # Local secrets; hosted config comes from the Vercel project settings.
-.env
+.env*
