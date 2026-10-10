@@ -92,6 +92,12 @@ chú có chấm vàng trên lưới câu và hiện ghi chú trong trang kết q
 N** ở màn bắt đầu mở danh sách các câu đã ghi chú: sửa tại chỗ (xóa trắng = bỏ ghi
 chú), **Luyện N câu này**, và **Xuất/Nhập file** để chuyển ghi chú sang máy khác.
 
+## Ôn lại
+
+Section **Ôn lại** ở kho đề gom từ mọi đề: **câu làm sai** (tự ghi khi chấm/nộp, làm
+đúng lại hoặc bấm "Đã nắm" thì bỏ khỏi danh sách) và **câu có ghi chú**. Mở thẻ để
+xem lại lựa chọn cũ, đáp án, bình luận, rồi **Luyện N câu này**. Chỉ lưu trên trình duyệt.
+
 ## Chế độ làm bài
 
 Chọn ở màn bắt đầu:

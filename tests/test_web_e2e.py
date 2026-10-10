@@ -312,7 +312,7 @@ def test_practice_mode_grades_each_question_immediately(page):
     expect(choice(page, "A")).to_have_attribute("data-state", "correct")
     expect(choice(page, "C")).to_be_disabled()
     expect(dot(page, 1)).to_have_attribute("data-ok", "false")
-    expect(page.locator("#feedback .vote-row.is-answer")).to_contain_text("A")
+    expect(choice(page, "A").locator(".votes")).to_contain_text("lượt")
 
     # Q2: reveal without answering.
     page.click("#next")
@@ -580,3 +580,40 @@ def test_evidence_lists_comments_against_the_key(page):
     box.locator("summary").click()
     expect(box.locator('li[data-tone="agree"]')).to_have_count(5)
     expect(box.locator('li[data-tone="differ"] .ev-letters')).to_have_text("B")
+
+
+def test_review_hub_keeps_wrong_answers_until_answered_right(page):
+    hub = lambda kind: page.locator(f'.hub-card[data-bank="{kind}"]')
+    expect(hub("wrong")).to_be_disabled()
+
+    open_demo(page)
+    choice(page, "B").click()  # Q1 key is A
+    page.fill("#note", "xem lại")
+    page.click("#note-save")
+    expect(page.locator("#note-status")).to_contain_text("Đã lưu lúc")
+    page.click("#switch")
+    expect(hub("wrong").locator("b")).to_have_text("1")
+    expect(hub("notes").locator("b")).to_have_text("1")
+
+    hub("wrong").click()
+    expect(page.locator(".note-item")).to_have_count(1)
+    expect(page.locator(".note-item .mini.you")).to_have_text("lần trước: B")
+    expect(page.locator(".note-item .qnum")).to_have_text("Câu 1 · demo")
+    expect(page.locator(".note-item .evidence")).to_have_count(1)
+    page.click("#drill")
+    expect(page.locator("#counter")).to_have_text("01 / 1")
+    choice(page, "A").click()  # right this time: off the list
+    page.click("#switch")
+    expect(hub("wrong")).to_be_disabled()
+
+    # Exam mode records on submit; "Đã nắm" drops a question by hand.
+    open_demo(page, mode="Thi thử")
+    choice(page, "C").click()
+    page.click("#submit")
+    page.click("#home")
+    expect(hub("wrong").locator("b")).to_have_text("1")
+    hub("wrong").click()
+    page.click("[data-forget]")
+    expect(page.locator(".note-item")).to_have_count(0)
+    page.click("#back")
+    expect(hub("wrong")).to_be_disabled()

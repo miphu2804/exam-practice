@@ -54,13 +54,21 @@
   /* --------------------------------------------------------------- notes */
   // Notes stay in this browser only (one key per exam), so every user keeps their own.
   const NOTES = "notes:";
-  function notesOf(code = state.code) {
+  function stored(key) {
     try {
-      return JSON.parse(localStorage.getItem(NOTES + code)) || {};
+      return JSON.parse(localStorage.getItem(key)) || {};
     } catch {
       return {};
     }
   }
+  function store(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* storage full or blocked: the change lives until the page closes */
+    }
+  }
+  const notesOf = (code = state.code) => stored(NOTES + code);
   const qLabel = (q) => (q.orig ? `Câu ${q.orig} · ${q.code}` : `Câu ${q.n}`);
   const origin = (q) => q.orig || q.n; // number in its own exam (mixed exams renumber)
   const noteOf = (q) => notesOf(examOf(q))[origin(q)] || "";
@@ -69,11 +77,26 @@
     const notes = notesOf(examOf(q));
     if (text.trim()) notes[origin(q)] = text;
     else delete notes[origin(q)];
-    try {
-      localStorage.setItem(NOTES + examOf(q), JSON.stringify(notes));
-    } catch {
-      /* storage full or blocked: the note lives until the page closes */
-    }
+    store(NOTES + examOf(q), notes);
+  }
+
+  /* ----------------------------------------------------------- wrong bank */
+  // Questions last answered wrong, per exam and per browser: {origNumber: [letters picked]}.
+  // Answering one right later takes it off the list.
+  const WRONG = "wrong:";
+  const wrongOf = (code) => stored(WRONG + code);
+  function recordAttempt(n) {
+    const q = question(n);
+    if (!keyOf(q).length || !chosen(n).size) return; // no key or skipped: nothing to learn from
+    const wrong = wrongOf(examOf(q));
+    if (isCorrect(n)) delete wrong[origin(q)];
+    else wrong[origin(q)] = [...chosen(n)].sort();
+    store(WRONG + examOf(q), wrong);
+  }
+  function forgetWrong(q) {
+    const wrong = wrongOf(examOf(q));
+    delete wrong[origin(q)];
+    store(WRONG + examOf(q), wrong);
   }
 
   /* ------------------------------------------------------------- loading */
@@ -182,8 +205,12 @@
         ${crawlForm()}
         <p class="picker-status" id="picker-status" role="status"></p>
         <div class="exam-grid">${state.index.map(examCard).join("")}</div>
+        ${state.index.length ? reviewHub() : ""}
         ${state.index.length >= 2 ? mixForm() : ""}
       </section>`;
+    document.querySelectorAll(".hub-card").forEach((card) =>
+      card.addEventListener("click", () => openBank(card.dataset.bank))
+    );
     document.querySelectorAll(".exam-card").forEach((card, i) => {
       const entry = state.index[i];
       card.querySelector(".exam-main").addEventListener("click", () => openExam(entry));
@@ -231,24 +258,60 @@
       status.textContent = "Chọn ít nhất 2 đề để trộn.";
       return;
     }
-    const pool = [];
-    for (const code of codes) {
-      const data = await loadJson(EXAMS + code + "/data.js", "EXAM_DATA");
-      // Each question keeps its exam folder, its own number and that exam's crop box.
-      for (const q of data?.questions || []) pool.push({ ...q, code, orig: q.n, view: data.view });
-    }
-    if (!pool.length) {
+    if (!(await newMix(codes, parseInt(form.elements.count.value, 10)))) {
       status.textContent = "Các đề đã chọn chưa có câu hỏi.";
       return;
     }
-    const count = Math.min(pool.length, parseInt(form.elements.count.value, 10) || pool.length);
-    const questions = shuffle(pool).slice(0, count).map((q, i) => ({ ...q, n: i + 1 }));
-    state.code = "mix";
+    renderStart();
+  }
+
+  async function newMix(codes, count) {
+    const pool = await loadPool(codes);
+    if (!pool.length) return false;
+    count = Math.min(pool.length, count || pool.length);
+    useMixed("mix", "Trộn đề", `Trộn ${count} câu từ ${codes.length} đề`, codes, drawMix(pool, count));
+    return true;
+  }
+
+  /**
+   * Draw ``count`` questions, unseen ones first: independent draws keep bringing back
+   * questions from the last run, so ``mix:seen`` rotates through the whole pool before
+   * any question repeats.
+   */
+  function drawMix(pool, count) {
+    const id = (q) => `${q.code}:${q.orig}`;
+    let seen = new Set(Object.values(stored(SEEN)));
+    const fresh = shuffle(pool.filter((q) => !seen.has(id(q))));
+    const picked = [...fresh, ...shuffle(pool.filter((q) => seen.has(id(q))))].slice(0, count);
+    if (fresh.length <= count) seen = new Set(); // pool used up: this draw starts the next round
+    picked.forEach((q) => seen.add(id(q)));
+    store(SEEN, [...seen]);
+    return shuffle(picked);
+  }
+
+  const SEEN = "mix:seen";
+
+  /** Questions of several exams; each keeps its exam folder, its own number and that exam's crop box. */
+  async function loadPool(codes, keep = () => true) {
+    const pool = [];
+    for (const code of codes) {
+      const data = await loadJson(EXAMS + code + "/data.js", "EXAM_DATA");
+      for (const q of data?.questions || []) {
+        if (keep(code, q.n)) pool.push({ ...q, code, orig: q.n, view: data.view });
+      }
+    }
+    return pool;
+  }
+
+  /** Make a cross-exam set the current "exam", renumbered 1..N. */
+  function useMixed(code, brand, title, codes, pool) {
+    const questions = pool.map((q, i) => ({ ...q, n: i + 1 }));
+    state.code = code;
     state.data = {
-      code: "mix",
-      title: `Trộn ${count} câu từ ${codes.length} đề`,
+      code,
+      title,
       mixed: codes,
-      default_duration_min: Math.max(5, Math.ceil(count * 0.75)),
+      default_duration_min: Math.max(5, Math.ceil(questions.length * 0.75)),
       stats: {
         answered: questions.filter((q) => keyOf(q).length).length,
         multi: questions.filter((q) => q.multi).length,
@@ -256,10 +319,94 @@
       },
       questions,
     };
-    document.title = "Trộn đề · Luyện đề";
-    $("#brand").innerHTML = "<b>Trộn đề</b>";
+    document.title = `${brand} · Luyện đề`;
+    $("#brand").innerHTML = `<b>${esc(brand)}</b>`;
     $("#foot-meta").textContent = codes.join(" + ");
-    renderStart();
+  }
+
+  /* --------------------------------------------------------------- review */
+  // Review banks gather, from every exam, the questions this browser remembers.
+  const BANKS = {
+    wrong: {
+      of: wrongOf,
+      title: "Câu sai",
+      label: "câu làm sai",
+      none: "Chưa có câu sai",
+      hint: "Câu trả lời sai được lưu khi chấm; làm đúng lại thì tự bỏ khỏi danh sách.",
+    },
+    notes: {
+      of: notesOf,
+      title: "Ghi chú",
+      label: "câu có ghi chú",
+      none: "Chưa có ghi chú",
+      hint: "Ghi chú được viết ngay dưới mỗi câu khi làm bài.",
+    },
+  };
+  const bankSize = (kind) => state.index.reduce((sum, e) => sum + Object.keys(BANKS[kind].of(e.code)).length, 0);
+
+  function reviewHub() {
+    const cards = Object.entries(BANKS).map(([kind, bank]) => {
+      const size = bankSize(kind);
+      return `
+        <button class="hub-card" data-bank="${kind}" ${size ? "" : "disabled"}>
+          <b>${size}</b>
+          <span>${bank.label}</span>
+          <em>${size ? "Xem lại →" : esc(bank.hint)}</em>
+        </button>`;
+    });
+    return `
+      <section class="hub" aria-label="Ôn lại">
+        <div class="crawl-head">
+          <b>Ôn lại</b>
+          <span>Gom từ mọi đề; chỉ lưu trên trình duyệt này.</span>
+        </div>
+        <div class="hub-grid">${cards.join("")}</div>
+      </section>`;
+  }
+
+  async function openBank(kind) {
+    const bank = BANKS[kind];
+    const marks = Object.fromEntries(state.index.map((e) => [e.code, bank.of(e.code)]));
+    const codes = Object.keys(marks).filter((code) => Object.keys(marks[code]).length);
+    const pool = await loadPool(codes, (code, n) => n in marks[code]);
+    useMixed(kind, bank.title, `Ôn lại · ${bank.title}`, codes, pool);
+    renderBank(kind);
+  }
+
+  /** The questions of one review bank with answer, comments and note; drill them or drop one. */
+  function renderBank(kind) {
+    quizChrome(false);
+    const bank = BANKS[kind];
+    const items = state.data.questions;
+    $("#app").innerHTML = `
+      <section class="screen-enter">
+        <div class="result-head">
+          <div>
+            <p class="eyebrow">Ôn lại · ${bank.title}</p>
+            <h1 class="picker-title">${items.length ? `${items.length} ${bank.label}` : bank.none}</h1>
+          </div>
+          <div class="actions" style="margin:0">
+            <button class="btn primary" id="drill" ${items.length ? "" : "disabled"}>Luyện ${items.length} câu này</button>
+            <button class="btn ghost" id="back">← Kho đề</button>
+          </div>
+        </div>
+        ${items.length ? "" : `<p class="review-none">${esc(bank.hint)}</p>`}
+        <div class="review">${items.map((q) => noteItem(q, kind === "wrong")).join("")}</div>
+      </section>`;
+    document.querySelectorAll(".note-item textarea").forEach((area) =>
+      area.addEventListener("input", () => saveNote(question(Number(area.dataset.n)), area.value))
+    );
+    document.querySelectorAll("[data-forget]").forEach((button) =>
+      button.addEventListener("click", () => {
+        forgetWrong(question(Number(button.dataset.forget)));
+        button.closest(".note-item").remove();
+      })
+    );
+    $("#drill").addEventListener("click", () =>
+      start(Math.max(1, Math.ceil(items.length * 1.5)), items.map((q) => q.n), state.mode)
+    );
+    $("#back").addEventListener("click", () => { state.data = null; renderPicker(); });
+    window.scrollTo(0, 0);
   }
 
   async function renameExam(entry) {
@@ -557,7 +704,9 @@
     renderNotes();
   }
 
-  function noteItem(q) {
+  /** A question with its note; ``wrong`` adds the last wrong pick, the comments and a way to drop it. */
+  function noteItem(q, wrong = false) {
+    const picked = wrong ? wrongOf(examOf(q))[origin(q)] : null;
     return `
       <article class="review-item note-item">
         <div>${q.image ? shot(q, "lazy") : ""}</div>
@@ -567,8 +716,11 @@
             <span class="review-links">${traceLinks(q)}</span>
           </div>
           <div class="mini-choices">
+            ${picked ? `<span class="mini you">lần trước: ${esc(fmt(picked))}</span>` : ""}
             <span class="mini key">đáp án: ${esc(fmt(keyOf(q)) || "chưa có")}</span>
+            ${wrong ? `<button class="link-btn" data-forget="${q.n}">Đã nắm, bỏ khỏi danh sách</button>` : ""}
           </div>
+          ${wrong ? evidence(q) : ""}
           <textarea class="note-input" data-n="${q.n}" rows="4" aria-label="Ghi chú câu ${q.n}">${esc(noteOf(q))}</textarea>
         </div>
       </article>`;
@@ -607,26 +759,35 @@
           <div class="qhead"><span class="qnum" id="qnum"></span><span id="qtag"></span></div>
           <div class="image-pane" id="image-pane"></div>
           <div class="choices" id="choices" role="group" aria-label="Chọn đáp án"></div>
-          <div id="feedback"></div>
           <div class="qactions" id="actions"></div>
-          <textarea class="note-input" id="note" rows="2" placeholder="Ghi chú cho câu này (chỉ lưu trên trình duyệt của bạn)" aria-label="Ghi chú"></textarea>
-          <div class="qnav">
-            <button class="btn ghost" id="prev">← Trước</button>
-            <span class="spacer"></span>
-            <button class="btn" id="next">Sau →</button>
-          </div>
+          <div id="feedback"></div>
         </div>
         <aside class="quiz-side">
           <p class="eyebrow">Câu hỏi</p>
           <div class="dots" id="dots" aria-label="Danh sách câu"></div>
+          <div class="qnav">
+            <button class="btn ghost" id="prev">← Trước</button>
+            <button class="btn" id="next">Sau →</button>
+          </div>
+          <textarea class="note-input" id="note" rows="5" placeholder="Ghi chú cho câu này (chỉ lưu trên trình duyệt của bạn)" aria-label="Ghi chú"></textarea>
+          <div class="note-bar">
+            <span class="note-status" id="note-status" role="status"></span>
+            <button class="btn" id="note-save">Lưu</button>
+          </div>
         </aside>
       </section>`;
     $("#prev").addEventListener("click", () => goto(state.i - 1));
     $("#next").addEventListener("click", () => (state.i === state.queue.length - 1 ? finish() : goto(state.i + 1)));
-    $("#note").addEventListener("input", (event) => {
-      saveNote(question(state.queue[state.i]), event.target.value);
+    // Notes save on every keystroke; the button is an explicit confirmation for the reader.
+    const keepNote = (status) => {
+      saveNote(question(state.queue[state.i]), $("#note").value);
+      $("#note-status").textContent = status;
       paintDots();
-    });
+    };
+    $("#note").addEventListener("input", () => keepNote("Đã tự lưu"));
+    $("#note-save").addEventListener("click", () =>
+      keepNote(`Đã lưu lúc ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`)
+    );
     paint();
   }
 
@@ -647,7 +808,7 @@
       const trace = links ? `<div class="trace-row">${links}</div>` : "";
       if (q.image) {
         pane.classList.remove("missing");
-        pane.innerHTML = `${shot(q)}${trace}`;
+        pane.innerHTML = `<div class="frame">${shot(q)}</div>${trace}`;
         pane.classList.remove("q-enter");
         void pane.offsetWidth;
         pane.classList.add("q-enter");
@@ -656,6 +817,7 @@
         pane.innerHTML = trace;
       }
       $("#note").value = noteOf(q);
+      $("#note-status").textContent = "";
     }
 
     const letters = q.choices?.length ? q.choices : ["A", "B", "C", "D"];
@@ -665,6 +827,7 @@
         const mark = shown ? (key.includes(c) ? "correct" : picked.has(c) ? "wrong" : "") : "";
         return `<button class="choice" data-c="${c}" aria-pressed="${picked.has(c)}" data-state="${mark}" ${shown ? "disabled" : ""}>
              <span class="key">${c}</span>
+             ${shown ? `<span class="votes">${q.letter_votes?.[c] || 0} lượt</span>` : ""}
            </button>`;
       })
       .join("");
@@ -696,7 +859,7 @@
       ? `width:${(v.width / v.w) * 100}%;left:${(-v.x / v.w) * 100}%;top:${(-v.y / v.h) * 100}%`
       : "";
     return `<a class="shot ${v ? "cropped" : ""}" href="${src}" target="_blank" rel="noopener" title="Mở ảnh gốc"
-        ${v ? `style="aspect-ratio:${v.w}/${v.h}"` : ""}>
+        ${v ? `style="aspect-ratio:${v.w}/${v.h};--ratio:${v.w / v.h}"` : ""}>
         <img src="${src}" alt="Câu ${q.n}" loading="${loading}" style="${style}" /></a>`;
   }
 
@@ -721,7 +884,6 @@
           <span class="mini you">bạn: ${esc(yours)}</span>
           <span class="mini key">đáp án: ${esc(fmt(key) || "chưa có")}</span>
         </div>
-        ${voteBars(q)}
         ${evidence(q)}
       </div>`;
   }
@@ -793,7 +955,10 @@
       picked = picked.has(letter) && picked.size === 1 ? new Set() : new Set([letter]);
     }
     state.answers.set(n, picked);
-    if (state.mode === "practice" && !q.multi && picked.size) state.checked.add(n);
+    if (state.mode === "practice" && !q.multi && picked.size) {
+      state.checked.add(n);
+      recordAttempt(n);
+    }
     paint();
   }
 
@@ -801,6 +966,7 @@
     const n = state.queue[state.i];
     if (!chosen(n).size) return;
     state.checked.add(n);
+    recordAttempt(n);
     paint();
   }
 
@@ -865,6 +1031,8 @@
     if (state.finished) return;
     state.finished = true;
     stopTimer();
+    // Practice mode already recorded each checked answer; exam mode grades everything now.
+    if (state.mode === "exam") state.queue.forEach(recordAttempt);
     renderResult(auto);
   }
 
@@ -896,6 +1064,7 @@
             <div class="score"><b>${correct}</b><span>/ ${total} câu đúng · ${pct}%</span></div>
           </div>
           <div class="actions" style="margin:0">
+            <button class="btn ghost" id="home">← Kho đề</button>
             <button class="btn" id="retry-wrong" ${wrong.length ? "" : "disabled"}>Ôn ${wrong.length} câu sai</button>
             <button class="btn primary" id="again">Làm lại</button>
           </div>
@@ -910,7 +1079,14 @@
       chip.addEventListener("click", () => filterReview(chip.dataset.filter))
     );
 
-    $("#again").addEventListener("click", renderStart);
+    $("#again").addEventListener("click", async () => {
+      if (state.code === "mix") await newMix(state.data.mixed, state.data.questions.length);
+      renderStart();
+    });
+    $("#home").addEventListener("click", () => {
+      state.data = null;
+      renderPicker();
+    });
     $("#retry-wrong").addEventListener("click", () => {
       wrong.forEach((n) => state.answers.delete(n));
       start(Math.max(1, Math.ceil(wrong.length * 1.5)), wrong, state.mode);
