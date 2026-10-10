@@ -5,7 +5,8 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const esc = (value) =>
     String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const img = (path) => (path ? EXAMS + state.code + "/" + path : "");
+  const examOf = (q) => q.code || state.code;
+  const img = (q, path) => (path ? EXAMS + examOf(q) + "/" + path : "");
   const fmt = (letters) => {
     const list = [...(letters || [])].sort();
     return list.length ? list.join(", ") : "";
@@ -16,6 +17,8 @@
     code: "",
     data: null,
     mode: "practice",
+    order: "fixed",
+    shuffled: false,
     queue: [],
     i: 0,
     answers: new Map(),
@@ -32,6 +35,15 @@
   const question = (n) => state.data.questions.find((q) => q.n === n);
   const chosen = (n) => state.answers.get(n) || new Set();
   const keyOf = (q) => q.answer || [];
+  /** Fisher–Yates on a copy. */
+  const shuffle = (list) => {
+    const out = [...list];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  };
   const sameSet = (a, b) => a.size === b.length && [...a].every((c) => b.includes(c));
   const isCorrect = (n) => {
     const key = keyOf(question(n));
@@ -49,17 +61,16 @@
       return {};
     }
   }
-  const noteOf = (n) => notesOf()[n] || "";
-  const notedQuestions = () => {
-    const notes = notesOf();
-    return state.data.questions.map((q) => q.n).filter((n) => notes[n]);
-  };
-  function saveNote(n, text) {
-    const notes = notesOf();
-    if (text.trim()) notes[n] = text;
-    else delete notes[n];
+  const qLabel = (q) => (q.orig ? `Câu ${q.orig} · ${q.code}` : `Câu ${q.n}`);
+  const origin = (q) => q.orig || q.n; // number in its own exam (mixed exams renumber)
+  const noteOf = (q) => notesOf(examOf(q))[origin(q)] || "";
+  const notedQuestions = () => state.data.questions.filter((q) => noteOf(q)).map((q) => q.n);
+  function saveNote(q, text) {
+    const notes = notesOf(examOf(q));
+    if (text.trim()) notes[origin(q)] = text;
+    else delete notes[origin(q)];
     try {
-      localStorage.setItem(NOTES + state.code, JSON.stringify(notes));
+      localStorage.setItem(NOTES + examOf(q), JSON.stringify(notes));
     } catch {
       /* storage full or blocked: the note lives until the page closes */
     }
@@ -94,7 +105,13 @@
   }
 
   async function boot() {
-    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+    let theme = "";
+    try {
+      theme = localStorage.getItem("theme") || "";
+    } catch {
+      /* storage blocked: follow the system */
+    }
+    applyTheme(theme in THEMES ? theme : "");
     bindChrome();
     state.hosted = await fetch("/api/info")
       .then((response) => (response.ok ? response.json() : {}))
@@ -116,7 +133,6 @@
     document.title = `${data.code} · Luyện đề`;
     $("#brand").innerHTML = `<b>${esc(data.code)}</b>`;
     $("#foot-meta").textContent = `${data.code}${data.generated ? " · " + data.generated.slice(0, 10) : ""}`;
-    $("#switch").hidden = false;
     renderStart();
   }
 
@@ -131,16 +147,32 @@
     });
   }
 
+  const THEMES = { "": "Tự động", light: "Sáng", dark: "Tối" };
+
   function cycleTheme() {
-    const order = ["", "light", "dark"];
-    const next = order[(order.indexOf(localStorage.getItem("theme") || "") + 1) % order.length];
-    localStorage.setItem("theme", next);
-    document.documentElement.dataset.theme = next;
+    const order = Object.keys(THEMES);
+    applyTheme(order[(order.indexOf(document.documentElement.dataset.theme) + 1) % order.length]);
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    $("#theme").textContent = THEMES[theme];
+    try {
+      localStorage.setItem("theme", theme);
+    } catch {
+      /* private mode: the choice lasts until reload */
+    }
+  }
+
+  /** Clock, pause and submit belong to a running quiz; brand and theme stay in every screen. */
+  function quizChrome(on) {
+    $("#quiz-controls").hidden = !on;
+    $("#timebar").hidden = !on;
   }
 
   /* -------------------------------------------------------------- picker */
   function renderPicker() {
-    $("#topbar").hidden = true;
+    quizChrome(false);
     $("#brand").innerHTML = "<b>exam-practice</b>";
     $("#foot-meta").textContent = "";
     $("#app").innerHTML = `
@@ -150,6 +182,7 @@
         ${crawlForm()}
         <p class="picker-status" id="picker-status" role="status"></p>
         <div class="exam-grid">${state.index.map(examCard).join("")}</div>
+        ${state.index.length >= 2 ? mixForm() : ""}
       </section>`;
     document.querySelectorAll(".exam-card").forEach((card, i) => {
       const entry = state.index[i];
@@ -158,6 +191,75 @@
       card.querySelector("[data-act=delete]")?.addEventListener("click", () => deleteExam(entry));
     });
     $("#crawl").addEventListener("submit", submitCrawl);
+    $("#mix")?.addEventListener("submit", submitMix);
+  }
+
+  /* ------------------------------------------------------------------ mix */
+  function mixForm() {
+    return `
+      <form class="crawl mix" id="mix">
+        <div class="crawl-head">
+          <b>Trộn đề</b>
+          <span>Chọn từ 2 đề trở lên; lấy ngẫu nhiên số câu bạn muốn từ các đề đó rồi trộn thứ tự.</span>
+        </div>
+        <div class="mix-list">
+          ${state.index
+            .map(
+              (e) => `<label class="mix-item">
+                <input type="checkbox" name="code" value="${esc(e.code)}" />
+                <span>${esc(e.title || e.code)}</span>
+                <em>${e.stats?.questions ?? "?"} câu</em>
+              </label>`
+            )
+            .join("")}
+        </div>
+        <div class="crawl-row">
+          <input name="count" type="number" min="1" max="1000" placeholder="Số câu (bỏ trống: tất cả)" aria-label="Số câu" />
+          <button class="btn primary" type="submit">Trộn và làm</button>
+        </div>
+        <p class="crawl-status" id="mix-status" role="status"></p>
+      </form>`;
+  }
+
+  async function submitMix(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const status = $("#mix-status");
+    const codes = [...form.querySelectorAll("input[name=code]:checked")].map((box) => box.value);
+    status.dataset.tone = "bad";
+    if (codes.length < 2) {
+      status.textContent = "Chọn ít nhất 2 đề để trộn.";
+      return;
+    }
+    const pool = [];
+    for (const code of codes) {
+      const data = await loadJson(EXAMS + code + "/data.js", "EXAM_DATA");
+      // Each question keeps its exam folder, its own number and that exam's crop box.
+      for (const q of data?.questions || []) pool.push({ ...q, code, orig: q.n, view: data.view });
+    }
+    if (!pool.length) {
+      status.textContent = "Các đề đã chọn chưa có câu hỏi.";
+      return;
+    }
+    const count = Math.min(pool.length, parseInt(form.elements.count.value, 10) || pool.length);
+    const questions = shuffle(pool).slice(0, count).map((q, i) => ({ ...q, n: i + 1 }));
+    state.code = "mix";
+    state.data = {
+      code: "mix",
+      title: `Trộn ${count} câu từ ${codes.length} đề`,
+      mixed: codes,
+      default_duration_min: Math.max(5, Math.ceil(count * 0.75)),
+      stats: {
+        answered: questions.filter((q) => keyOf(q).length).length,
+        multi: questions.filter((q) => q.multi).length,
+        votes: questions.reduce((sum, q) => sum + (q.vote_count || 0), 0),
+      },
+      questions,
+    };
+    document.title = "Trộn đề · Luyện đề";
+    $("#brand").innerHTML = "<b>Trộn đề</b>";
+    $("#foot-meta").textContent = codes.join(" + ");
+    renderStart();
   }
 
   async function renameExam(entry) {
@@ -293,7 +395,7 @@
   }
 
   function renderEmpty(entry) {
-    $("#topbar").hidden = true;
+    quizChrome(false);
     $("#app").innerHTML = `
       <div class="empty screen-enter">
         <p class="eyebrow">Chưa có dữ liệu</p>
@@ -309,7 +411,7 @@
     stopTimer();
     state.finished = false;
     state.painted = null;
-    $("#topbar").hidden = true;
+    quizChrome(false);
     const d = state.data;
     const total = d.questions.length;
     const answered = d.stats?.answered ?? d.questions.filter((q) => keyOf(q).length).length;
@@ -321,6 +423,7 @@
         <h1>${esc(d.title || d.code)}</h1>
         <p class="lede">${total} câu hỏi, ${multi} câu nhiều đáp án. Đáp án được đối chiếu theo phương án được bình chọn nhiều nhất.</p>
         ${d.source ? `<p class="source">nguồn · <a href="${esc(d.source)}" target="_blank" rel="noopener">${esc(d.source)}</a></p>` : ""}
+        ${d.mixed ? `<p class="source">từ ${d.mixed.map(esc).join(" · ")}</p>` : ""}
         <div class="meta-cards">
           <div><b>${total}</b><span>câu hỏi</span></div>
           <div><b>${answered}</b><span>câu có đáp án</span></div>
@@ -332,6 +435,13 @@
             <div class="presets" role="group" aria-label="Chế độ làm bài">
               <button class="chip mode" data-mode="practice" aria-pressed="${state.mode === "practice"}">Luyện tập · chấm ngay</button>
               <button class="chip mode" data-mode="exam" aria-pressed="${state.mode === "exam"}">Thi thử · nộp mới chấm</button>
+            </div>
+          </div>
+          <div class="setup-row">
+            <label>Thứ tự câu</label>
+            <div class="presets" role="group" aria-label="Thứ tự câu">
+              <button class="chip order" data-order="fixed" aria-pressed="${state.order === "fixed"}">Theo đề</button>
+              <button class="chip order" data-order="shuffle" aria-pressed="${state.order === "shuffle"}">Xáo trộn</button>
             </div>
           </div>
           <div class="setup-row">
@@ -362,6 +472,14 @@
         paintModeNote();
       })
     );
+    document.querySelectorAll(".chip.order").forEach((chip) =>
+      chip.addEventListener("click", () => {
+        state.order = chip.dataset.order;
+        document.querySelectorAll(".chip.order").forEach((c) =>
+          c.setAttribute("aria-pressed", String(c.dataset.order === state.order))
+        );
+      })
+    );
     paintModeNote();
     $("#start").addEventListener("click", () => {
       const value = Math.min(240, Math.max(1, parseInt($("#minutes").value, 10) || 45));
@@ -373,9 +491,8 @@
   /* --------------------------------------------------------- notes screen */
   /** Every question of this exam that has a note, editable in place, with a drill over just those. */
   function renderNotes() {
-    $("#topbar").hidden = true;
+    quizChrome(false);
     const noted = notedQuestions();
-    const notes = notesOf();
     $("#app").innerHTML = `
       <section class="screen-enter">
         <div class="result-head">
@@ -394,10 +511,10 @@
           <label class="link-btn">Nhập file<input type="file" id="import-notes" accept="application/json,.json" hidden /></label>
         </p>
         ${noted.length ? "" : `<p class="review-none">Ghi chú được viết ngay dưới mỗi câu khi làm bài và chỉ lưu trên trình duyệt này.</p>`}
-        <div class="review">${noted.map((n) => noteItem(question(n), notes[n])).join("")}</div>
+        <div class="review">${noted.map((n) => noteItem(question(n))).join("")}</div>
       </section>`;
     document.querySelectorAll(".note-item textarea").forEach((area) =>
-      area.addEventListener("input", () => saveNote(Number(area.dataset.n), area.value))
+      area.addEventListener("input", () => saveNote(question(Number(area.dataset.n)), area.value))
     );
     $("#drill-notes").addEventListener("click", () => {
       const minutes = Math.max(1, Math.ceil(notedQuestions().length * 1.5));
@@ -440,19 +557,19 @@
     renderNotes();
   }
 
-  function noteItem(q, text) {
+  function noteItem(q) {
     return `
       <article class="review-item note-item">
         <div>${q.image ? shot(q, "lazy") : ""}</div>
         <div>
           <div class="qhead" style="margin-bottom:8px">
-            <span class="qnum">Câu ${q.n}</span>
+            <span class="qnum">${esc(qLabel(q))}</span>
             <span class="review-links">${traceLinks(q)}</span>
           </div>
           <div class="mini-choices">
             <span class="mini key">đáp án: ${esc(fmt(keyOf(q)) || "chưa có")}</span>
           </div>
-          <textarea class="note-input" data-n="${q.n}" rows="4" aria-label="Ghi chú câu ${q.n}">${esc(text)}</textarea>
+          <textarea class="note-input" data-n="${q.n}" rows="4" aria-label="Ghi chú câu ${q.n}">${esc(noteOf(q))}</textarea>
         </div>
       </article>`;
   }
@@ -468,7 +585,8 @@
 
   function start(minutes, queue, mode) {
     state.mode = mode || state.mode;
-    state.queue = queue;
+    state.shuffled = state.order === "shuffle";
+    state.queue = state.shuffled ? shuffle(queue) : queue;
     state.i = 0;
     state.answers = new Map();
     state.checked = new Set();
@@ -476,7 +594,7 @@
     state.finished = false;
     state.durationMs = minutes * 60000;
     state.remainingMs = state.durationMs;
-    $("#topbar").hidden = false;
+    quizChrome(true);
     renderQuiz();
     startTimer();
   }
@@ -506,7 +624,7 @@
     $("#prev").addEventListener("click", () => goto(state.i - 1));
     $("#next").addEventListener("click", () => (state.i === state.queue.length - 1 ? finish() : goto(state.i + 1)));
     $("#note").addEventListener("input", (event) => {
-      saveNote(state.queue[state.i], event.target.value);
+      saveNote(question(state.queue[state.i]), event.target.value);
       paintDots();
     });
     paint();
@@ -519,7 +637,7 @@
     const picked = chosen(n);
 
     $("#counter").innerHTML = `<b>${String(state.i + 1).padStart(2, "0")}</b> / ${state.queue.length}`;
-    $("#qnum").textContent = `Câu ${n}`;
+    $("#qnum").textContent = qLabel(q);
     $("#qtag").innerHTML = q.multi ? `<span class="tag">${q.pick ? `chọn ${q.pick} đáp án` : "nhiều đáp án"}</span>` : "";
 
     if (state.painted !== n) {
@@ -537,7 +655,7 @@
         pane.classList.add("missing");
         pane.innerHTML = trace;
       }
-      $("#note").value = noteOf(n);
+      $("#note").value = noteOf(q);
     }
 
     const letters = q.choices?.length ? q.choices : ["A", "B", "C", "D"];
@@ -572,8 +690,8 @@
 
   /** Question image zoomed to the exam's text box (``data.view``); click opens the full image. */
   function shot(q, loading = "eager") {
-    const v = state.data.view;
-    const src = esc(img(q.image));
+    const v = q.view || state.data.view;
+    const src = esc(img(q, q.image));
     const style = v
       ? `width:${(v.width / v.w) * 100}%;left:${(-v.x / v.w) * 100}%;top:${(-v.y / v.h) * 100}%`
       : "";
@@ -604,7 +722,33 @@
           <span class="mini key">đáp án: ${esc(fmt(key) || "chưa có")}</span>
         </div>
         ${voteBars(q)}
+        ${evidence(q)}
       </div>`;
+  }
+
+  /** The comments behind the key, so a doubtful answer can be checked against what people wrote. */
+  function evidence(q) {
+    const votes = q.evidence || [];
+    if (!votes.length) return "";
+    const key = keyOf(q);
+    const matches = (letters) => key.length > 0 && sameSet(new Set(letters), key);
+    const agree = votes.filter((v) => matches(v.letters)).length;
+    const items = votes
+      .map((v) => {
+        const tone = !key.length ? "" : matches(v.letters) ? "agree" : "differ";
+        return `<li data-tone="${tone}">
+            <span class="ev-letters">${esc(v.letters.join(", "))}</span>
+            <span class="ev-author">${esc(v.author || "ẩn danh")}</span>
+            <span class="ev-text">${esc(v.text)}</span>
+          </li>`;
+      })
+      .join("");
+    return `
+      <details class="evidence" ${q.contested ? "open" : ""}>
+        <summary>Bình luận đối chiếu · ${agree}/${votes.length} khớp đáp án</summary>
+        <ul>${items}</ul>
+        ${q.media ? `<a class="trace" href="${esc(q.media)}" target="_blank" rel="noopener">mở trang bình luận ↗</a>` : ""}
+      </details>`;
   }
 
   function voteBars(q) {
@@ -625,14 +769,14 @@
   function paintDots() {
     const box = $("#dots");
     if (!box) return;
-    const notes = notesOf();
     box.innerHTML = state.queue
       .map((n, idx) => {
         const done = chosen(n).size > 0;
         const shown = revealed(n);
         const ok = shown ? isCorrect(n) : "";
         return `<button class="dot" data-idx="${idx}" data-done="${done}" data-current="${idx === state.i}"
-             data-checked="${shown}" data-ok="${ok}" data-note="${Boolean(notes[n])}">${n}</button>`;
+             data-checked="${shown}" data-ok="${ok}" data-note="${Boolean(noteOf(question(n)))}"
+             title="${esc(qLabel(question(n)))}">${state.shuffled ? idx + 1 : n}</button>`;
       })
       .join("");
     box.querySelectorAll(".dot").forEach((b) => b.addEventListener("click", () => goto(Number(b.dataset.idx))));
@@ -732,7 +876,7 @@
   }
 
   function renderResult(auto) {
-    $("#topbar").hidden = true;
+    quizChrome(false);
     const items = grade();
     const correct = items.filter((x) => x.ok).length;
     const total = items.length;
@@ -801,7 +945,7 @@
         <div>${q.image ? shot(q, "lazy") : ""}</div>
         <div>
           <div class="qhead" style="margin-bottom:8px">
-            <span class="qnum">Câu ${q.n}${q.multi ? ` · chọn ${q.pick || "nhiều"}` : ""}</span>
+            <span class="qnum">${esc(qLabel(q))}${q.multi ? ` · chọn ${q.pick || "nhiều"}` : ""}</span>
             <span class="review-links">
               ${links}
               <span class="verdict ${tone}">${verdict}${flag}</span>
@@ -813,14 +957,15 @@
             <span class="mini">${q.vote_count || 0} lượt bình chọn</span>
           </div>
           ${voteBars(q)}
-          ${noteOf(q.n) ? `<p class="review-note">${esc(noteOf(q.n))}</p>` : ""}
+          ${evidence(q)}
+          ${noteOf(q) ? `<p class="review-note">${esc(noteOf(q))}</p>` : ""}
         </div>
       </article>`;
   }
 
   /* ------------------------------------------------------------- keyboard */
   document.addEventListener("keydown", (event) => {
-    if (!state.data || $("#topbar").hidden) return;
+    if (!state.data || $("#quiz-controls").hidden) return;
     const target = event.target;
     const tag = target && target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;

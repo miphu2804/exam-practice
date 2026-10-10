@@ -8,18 +8,21 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar" id="topbar" hidden>
+  <header class="topbar" id="topbar">
     <div class="shell topbar-inner">
       <span class="brand" id="brand"></span>
-      <span class="counter" id="counter"></span>
+      <div class="quiz-controls" id="quiz-controls" hidden>
+        <span class="counter" id="counter"></span>
+        <span class="spacer"></span>
+        <span class="clock" id="clock" aria-live="off">--:--</span>
+        <button class="btn icon ghost" id="pause" title="Tạm dừng (P)">Tạm dừng</button>
+        <button class="btn icon ghost" id="submit" title="Nộp bài">Nộp bài</button>
+        <button class="btn icon ghost" id="switch" title="Đổi đề">Đổi đề</button>
+      </div>
       <span class="spacer"></span>
-      <span class="clock" id="clock" aria-live="off">--:--</span>
-      <button class="btn icon ghost" id="pause" title="Tạm dừng (P)">Tạm dừng</button>
-      <button class="btn icon ghost" id="submit" title="Nộp bài">Nộp bài</button>
-      <button class="btn icon ghost" id="switch" title="Đổi đề" hidden>Đổi đề</button>
-      <button class="btn icon ghost" id="theme" title="Đổi giao diện sáng/tối" aria-label="Đổi giao diện">◐</button>
+      <button class="btn icon ghost theme-btn" id="theme" title="Giao diện sáng/tối/tự động" aria-label="Đổi giao diện">Tự động</button>
     </div>
-    <div class="timebar" id="timebar"><i></i></div>
+    <div class="timebar" id="timebar" hidden><i></i></div>
   </header>
 
   <main class="shell" id="app"></main>

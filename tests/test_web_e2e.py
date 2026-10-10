@@ -109,6 +109,8 @@ def write_exam(root, code, title, questions, minutes=45):
                 "contested": False,
                 "letter_votes": {c: votes.get(c, 0) for c in "ABCD"},
                 "vote_count": sum(votes.values()),
+                "evidence": [{"author": f"u{c}{i}", "letters": [c], "text": f"chọn {c}"}
+                             for c, count in votes.items() for i in range(count)],
             }
         )
     data = {
@@ -160,7 +162,7 @@ def dot(page, n):
 # --------------------------------------------------------------------------- #
 def test_picker_lists_exams(page):
     expect(page.locator("h1")).to_have_text("Chọn đề để làm")
-    expect(page.locator("#topbar")).to_be_hidden()
+    expect(page.locator("#quiz-controls")).to_be_hidden()
     card = page.locator(".exam-card")
     expect(card).to_have_count(1)
     expect(card).to_contain_text("Demo exam")
@@ -334,7 +336,7 @@ def test_practice_mode_grades_each_question_immediately(page):
     expect(page.locator(".score")).to_contain_text("/ 4")
     expect(page.locator(".review-item")).to_have_count(4)
     expect(page.locator(".review-item").nth(3).locator(".verdict")).to_have_text("chưa có đáp án")
-    expect(page.locator(".review-item").first.locator("a.trace")).to_have_count(2)
+    expect(page.locator(".review-item").first.locator(".review-links a.trace")).to_have_count(2)
 
     page.click("#retry-wrong")
     expect(page.locator("#counter")).to_have_text("01 / 3")
@@ -415,7 +417,7 @@ def test_switch_exam_from_top_bar_stops_the_quiz(page):
     open_demo(page)
     page.click("#switch")
     expect(page.locator("h1")).to_have_text("Chọn đề để làm")
-    expect(page.locator("#topbar")).to_be_hidden()
+    expect(page.locator("#quiz-controls")).to_be_hidden()
     page.keyboard.press("1")  # shortcuts are inactive outside a quiz
     expect(page.locator("#choices")).to_have_count(0)
 
@@ -516,3 +518,55 @@ def test_hosted_picker_asks_for_cookie_and_hides_destructive_actions(browser, ex
         context.close()
         uv.should_exit = True
         thread.join()
+
+
+
+# --------------------------------------------------------------------------- #
+# Mix, shuffle, evidence
+# --------------------------------------------------------------------------- #
+def test_mix_draws_questions_from_several_exams(page, exams):
+    write_exam(exams, "other", "Other exam", QUESTIONS[:2])
+    build.write_index(exams)
+    page.reload()
+    page.click("#mix button[type=submit]")
+    expect(page.locator("#mix-status")).to_have_text("Chọn ít nhất 2 đề để trộn.")
+    page.locator(".mix-item", has_text="Demo exam").locator("input").check()
+    page.locator(".mix-item", has_text="Other exam").locator("input").check()
+    page.fill("#mix input[name=count]", "5")
+    page.click("#mix button[type=submit]")
+    expect(page.locator(".start h1")).to_have_text("Trộn 5 câu từ 2 đề")
+    page.click("#start")
+    expect(page.locator("#counter")).to_have_text("01 / 5")
+    labels = set()
+    for i in range(5):
+        code = page.locator("#qnum").inner_text().split(" · ")[1]  # "Câu 3 · demo"
+        labels.add(code)
+        # each question's image comes from its own exam folder
+        assert page.locator("#image-pane img").get_attribute("src").startswith(f"../../exams/{code}/")
+        if i < 4:
+            page.click("#next")
+    assert labels <= {"demo", "other"}
+
+
+def test_shuffle_order_changes_queue_but_keeps_every_question(page):
+    card(page, "Demo exam").locator(".exam-main").click()
+    page.locator(".chip.order", has_text="Xáo trộn").click()
+    page.click("#start")
+    expect(page.locator("#dots .dot")).to_have_count(4)
+    expect(page.locator("#dots .dot").first).to_have_text("1")
+    seen = []
+    for i in range(4):
+        seen.append(page.locator("#qnum").inner_text())
+        if i < 3:
+            page.click("#next")
+    assert sorted(seen) == ["Câu 1", "Câu 2", "Câu 3", "Câu 4"]
+
+
+def test_evidence_lists_comments_against_the_key(page):
+    open_demo(page)
+    choice(page, "A").click()
+    box = page.locator("#feedback .evidence")
+    expect(box.locator("summary")).to_have_text("Bình luận đối chiếu · 5/6 khớp đáp án")
+    box.locator("summary").click()
+    expect(box.locator('li[data-tone="agree"]')).to_have_count(5)
+    expect(box.locator('li[data-tone="differ"] .ev-letters')).to_have_text("B")

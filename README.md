@@ -4,7 +4,8 @@
 tải ảnh đề và bình luận, **tự đối chiếu** đáp án theo phương án được bình chọn
 nhiều nhất, rồi mở web tĩnh để làm bài với thanh thời gian đặt thủ công.
 
-Mỗi mã đề là một thư mục riêng trong `exams/`, code nằm trong `src/`.
+Mỗi mã đề là một thư mục riêng trong `exams/`, code nằm trong `src/`. Tài liệu
+cho người maintain: [docs/](docs/README.md).
 
 ## Chạy nhanh
 
@@ -116,6 +117,12 @@ lúc build `data.json` có `view` là khung chứa chữ chung của cả đề;
 theo khung đó (ảnh gốc giữ nguyên, bấm vào ảnh để mở bản đầy đủ). Đề cũ chưa có
 `view` thì chạy `uv run crawl.py --rebuild`.
 
+**Thứ tự câu:** *Theo đề* hoặc *Xáo trộn* (mỗi lần bắt đầu xáo lại). **Trộn đề:**
+ở kho đề chọn từ 2 đề trở lên + số câu → lấy ngẫu nhiên, mỗi câu ghi rõ đề gốc.
+Sau khi chấm, **Bình luận đối chiếu** liệt kê các bình luận đã bầu cho câu đó (khớp /
+lệch đáp án) để tự kiểm chứng; tự mở khi câu bị tranh chấp. Nút góc phải header đổi
+giao diện **Tự động / Sáng / Tối**.
+
 Câu **nhiều đáp án** hiện thẻ "chọn N đáp án" (N lấy từ đáp án đối chiếu) và dùng
 nút bật/tắt nhiều lựa chọn; số đáp án có thể là 2, 3 hoặc 4.
 
@@ -217,7 +224,8 @@ tests/                         test parser, pipeline, API + E2E web (test_web_e2
       "pick": 1,
       "contested": false,
       "letter_votes": { "A": 4, "B": 1, "C": 2, "D": 0 },
-      "vote_count": 7
+      "vote_count": 7,
+      "evidence": [{ "author": "an", "letters": ["A"], "text": "Câu 1: A" }]
     }
   ]
 }
