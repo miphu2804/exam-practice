@@ -19,12 +19,14 @@ CrawlExam = Callable[..., dict]
 
 
 class ExamService:
-    def __init__(self, storage: ExamStorage, crawl_exam: CrawlExam, cookie_file: Path) -> None:
+    def __init__(self, storage: ExamStorage, crawl_exam: CrawlExam, cookie_file: Path, shared_cookie: str | None = None) -> None:
         self._storage = storage
         self._crawl_exam = crawl_exam
         self._cookie_file = cookie_file
+        self._shared_cookie = shared_cookie or ""
 
     def crawl(self, url: str, name: str, minutes: int | None, cookie: str, progress: Progress = no_progress) -> dict:
+        cookie = cookie or self._shared_cookie
         if self._storage.requires_visitor_cookie and not cookie:
             raise LoginRequired("Dán cookie xf_user FuOverflow của bạn để crawl.")
         entry = {"code": slug_code(url), "name": name, "url": url, "minutes": minutes}
