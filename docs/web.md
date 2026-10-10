@@ -57,6 +57,8 @@ gốc) và đánh số lại `n = 1..N`. Vì thế **luôn dùng helper**, đừ
 - **Ôn lại** (`reviewHub` → `openBank`): thẻ "câu làm sai" / "câu có ghi chú" đếm trên mọi
   đề trong index; mở thì nạp các câu đó thành một bộ trộn (`code` = `wrong`/`notes`) để xem
   lại hoặc luyện.
+- **Crawl** (`submitCrawl` → `streamCrawl`): đọc NDJSON từ `/api/crawl/stream`, cập nhật
+  `<progress id="crawl-progress">` (chưa biết tổng thì ở trạng thái indeterminate).
 - **Theme**: `localStorage.theme` ∈ `"" | "light" | "dark"`; `applyTheme` đặt
   `data-theme` trên `<html>`. Mọi truy cập storage đều bọc `try` (chế độ riêng tư).
 

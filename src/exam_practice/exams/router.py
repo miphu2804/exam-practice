@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import queue
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 
 from .. import catalog, crawler
 from ..fetch import LoginRequired
@@ -50,22 +53,33 @@ def info(request: Request) -> InfoResponse:
 
 @api_router.post("/crawl", response_model=CrawlResponse)
 def crawl(body: CrawlRequest, service: ExamService = Depends(get_exam_service)) -> CrawlResponse:  # sync: runs in uvicorn's threadpool
-    url = thread_url(body.url)
-    if not url:
-        raise HTTPException(400, "Link phải là thread FuOverflow: https://fuoverflow.com/threads/...")
-    minutes = body.minutes if body.minutes and 1 <= body.minutes <= 240 else None
-    try:
-        data = service.crawl(url=url, name=body.name.strip(), minutes=minutes, cookie=body.cookie.strip())
-    except LoginRequired as exc:
-        raise HTTPException(401, str(exc)) from exc
-    except crawler.CrawlError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    except StorageBusy as exc:
-        raise HTTPException(409, BUSY_MESSAGE) from exc
-    except Exception as exc:
-        logger.exception("crawl failed for %s", url)
-        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
-    return CrawlResponse(code=data["code"], title=data["title"], stats=data["stats"])
+    return _run_crawl(body, service, _valid_url(body))
+
+
+@api_router.post("/crawl/stream")
+def crawl_stream(body: CrawlRequest, service: ExamService = Depends(get_exam_service)) -> StreamingResponse:
+    """The crawl as NDJSON: ``{done, total, label}`` lines, then ``{result}`` or ``{error, status}``."""
+    url = _valid_url(body)  # a bad link is still a plain 400 before the stream starts
+    events: queue.Queue[dict | None] = queue.Queue()
+
+    def report(done: int, total: int, label: str) -> None:
+        events.put({"done": done, "total": total, "label": label})
+
+    def run() -> None:
+        try:
+            events.put({"result": _run_crawl(body, service, url, report).model_dump()})
+        except HTTPException as exc:
+            events.put({"error": exc.detail, "status": exc.status_code})
+        finally:
+            events.put(None)
+
+    threading.Thread(target=run, daemon=True).start()
+
+    def lines() -> Iterator[str]:
+        while (event := events.get()) is not None:
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
 # Checked before the title: a hosted visitor gets 403 whatever the body contains.
@@ -98,6 +112,29 @@ def hosted_index(request: Request) -> list[dict]:
 def hosted_exam_file(path: str, request: Request) -> RedirectResponse:
     storage: BlobExamStorage = request.app.state.exam_storage
     return RedirectResponse(storage.public_url(f"exams/{path}"), status_code=307)
+
+
+def _valid_url(body: CrawlRequest) -> str:
+    url = thread_url(body.url)
+    if not url:
+        raise HTTPException(400, "Link phải là thread FuOverflow: https://fuoverflow.com/threads/...")
+    return url
+
+
+def _run_crawl(body: CrawlRequest, service: ExamService, url: str, progress: crawler.Progress = crawler.no_progress) -> CrawlResponse:
+    minutes = body.minutes if body.minutes and 1 <= body.minutes <= 240 else None
+    try:
+        data = service.crawl(url=url, name=body.name.strip(), minutes=minutes, cookie=body.cookie.strip(), progress=progress)
+    except LoginRequired as exc:
+        raise HTTPException(401, str(exc)) from exc
+    except crawler.CrawlError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except StorageBusy as exc:
+        raise HTTPException(409, BUSY_MESSAGE) from exc
+    except Exception as exc:
+        logger.exception("crawl failed for %s", url)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+    return CrawlResponse(code=data["code"], title=data["title"], stats=data["stats"])
 
 
 def _refuse_when_hosted(request: Request) -> None:

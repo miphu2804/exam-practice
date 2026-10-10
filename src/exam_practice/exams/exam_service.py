@@ -7,14 +7,15 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from ..crawler import Progress, no_progress
 from ..fetch import LoginRequired, load_cookies
 from ..parse import slug_code
 from .storage import ExamStorage
 
 logger = logging.getLogger(__name__)
 
-# ``crawler.crawl_exam(entry, cookies)``: fetches the thread and returns the practice data.
-CrawlExam = Callable[[dict, dict[str, str]], dict]
+# ``crawler.crawl_exam(entry, cookies, progress=...)``: fetches the thread and returns the practice data.
+CrawlExam = Callable[..., dict]
 
 
 class ExamService:
@@ -23,7 +24,7 @@ class ExamService:
         self._crawl_exam = crawl_exam
         self._cookie_file = cookie_file
 
-    def crawl(self, url: str, name: str, minutes: int | None, cookie: str) -> dict:
+    def crawl(self, url: str, name: str, minutes: int | None, cookie: str, progress: Progress = no_progress) -> dict:
         if self._storage.requires_visitor_cookie and not cookie:
             raise LoginRequired("Dán cookie xf_user FuOverflow của bạn để crawl.")
         entry = {"code": slug_code(url), "name": name, "url": url, "minutes": minutes}
@@ -31,7 +32,7 @@ class ExamService:
             logger.info("crawl start %s", entry["code"])
             started = time.perf_counter()
             cookies = load_cookies(cookie, self._cookie_file)
-            data = self._crawl_exam(entry, cookies)
+            data = self._crawl_exam(entry, cookies, progress=progress)
             self._storage.save(entry, data)
         logger.info(
             "crawl done %s in %.1fs: %s questions",

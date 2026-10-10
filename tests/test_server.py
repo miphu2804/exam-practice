@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -53,7 +55,7 @@ def test_thread_url_accepts_only_fuoverflow_threads():
 def test_crawl_returns_summary_and_normalized_request(exams):
     calls = []
 
-    def crawl_exam(entry, cookies):
+    def crawl_exam(entry, cookies, progress):
         calls.append((entry, cookies))
         return crawled()
 
@@ -62,6 +64,31 @@ def test_crawl_returns_summary_and_normalized_request(exams):
     assert response.json() == {"code": "x", "title": "X", "stats": crawled()["stats"]}
     assert calls == [({"code": "x", "name": "X", "url": THREAD, "minutes": None}, {"xf_user": "abc"})]
     assert [entry["code"] for entry in registry.load(exams / "registry.json")] == ["x"]
+
+
+def test_crawl_stream_reports_progress_then_result(exams):
+    def crawl_exam(entry, cookies, progress):
+        progress(0, 2, "Tải trang thread 1/1")
+        progress(1, 2, "Tải ảnh và bình luận 1/1")
+        return crawled()
+
+    response = client(crawl_exam).post("/api/crawl/stream", json={"url": THREAD})
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert response.headers["content-type"] == "application/x-ndjson"
+    assert events == [
+        {"done": 0, "total": 2, "label": "Tải trang thread 1/1"},
+        {"done": 1, "total": 2, "label": "Tải ảnh và bình luận 1/1"},
+        {"result": {"code": "x", "title": "X", "stats": crawled()["stats"]}},
+    ]
+
+
+def test_crawl_stream_ends_with_the_error_status():
+    def crawl_exam(entry, cookies, progress):
+        raise LoginRequired("cookie hết hạn")
+
+    response = client(crawl_exam).post("/api/crawl/stream", json={"url": THREAD})
+    assert [json.loads(line) for line in response.text.splitlines()] == [{"error": "cookie hết hạn", "status": 401}]
+    assert client(crawl_exam).post("/api/crawl/stream", json={"url": "https://example.com/x"}).status_code == 400
 
 
 def test_rejects_non_fuoverflow_url_without_crawling():
@@ -73,7 +100,7 @@ def test_rejects_non_fuoverflow_url_without_crawling():
 
 
 def test_login_error_is_reported():
-    def crawl_exam(entry, cookies):
+    def crawl_exam(entry, cookies, progress):
         raise LoginRequired("cookie hết hạn")
 
     response = client(crawl_exam).post("/api/crawl", json={"url": THREAD})
@@ -87,7 +114,7 @@ def test_serves_web_app_and_exams():
 
 
 def test_unusable_thread_is_a_bad_request():
-    def crawl_exam(entry, cookies):
+    def crawl_exam(entry, cookies, progress):
         raise CrawlError("Could not read the exam code")
 
     response = client(crawl_exam).post("/api/crawl", json={"url": THREAD})
@@ -140,7 +167,7 @@ def test_hosted_crawl_publishes_and_cleans_tmp(exams, monkeypatch):
     published = []
     monkeypatch.setattr(BlobExamStorage, "_publish", lambda self, exam_dir: published.append(exam_dir.name))
 
-    def crawl_exam(entry, cookies):
+    def crawl_exam(entry, cookies, progress):
         (exams / "x").mkdir()
         return {"code": "x", "title": "X", "stats": {}, "cookies": cookies}
 
@@ -154,7 +181,7 @@ def test_hosted_crawl_removes_tmp_even_when_publish_fails(exams, monkeypatch):
     def publish(self, exam_dir):
         raise OSError("blob down")
 
-    def crawl_exam(entry, cookies):
+    def crawl_exam(entry, cookies, progress):
         (exams / "x").mkdir()
         return {"code": "x", "title": "X", "stats": {}}
 

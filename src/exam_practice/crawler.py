@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -25,6 +26,14 @@ class CrawlError(RuntimeError):
     """The thread cannot be turned into an exam (user-facing message)."""
 
 
+# ``progress(done, total, label)``: one call per downloaded thread page or attachment.
+Progress = Callable[[int, int, str], None]
+
+
+def no_progress(done: int, total: int, label: str) -> None:
+    pass
+
+
 def crawl_exam(
     entry: dict,
     cookies: dict[str, str],
@@ -33,9 +42,12 @@ def crawl_exam(
     no_images: bool = False,
     questions: int | None = None,
     default_minutes: int = 45,
+    progress: Progress = no_progress,
 ) -> dict:
     """Crawl a registry-style entry and write its practice data; returns the data."""
-    exam_dir, manifest = crawl_thread(entry["url"], cookies, delay=delay, no_images=no_images, code=entry.get("code"))
+    exam_dir, manifest = crawl_thread(
+        entry["url"], cookies, delay=delay, no_images=no_images, code=entry.get("code"), progress=progress
+    )
     if entry.get("name"):
         manifest["title"] = entry["name"]
     data = build.build_exam(manifest, exam_dir, minutes=entry.get("minutes") or default_minutes, questions=questions)
@@ -50,6 +62,7 @@ def crawl_thread(
     delay: float = 0.6,
     no_images: bool = False,
     code: str | None = None,
+    progress: Progress = no_progress,
 ) -> tuple[Path, dict]:
     """Download a thread and its attachment media, returning (exam_dir, manifest)."""
     session = Session(cookies, delay=delay)
@@ -67,9 +80,14 @@ def crawl_thread(
         raw_dir = exam_dir / "raw"
         raw_dir.mkdir(parents=True, exist_ok=True)
 
+        pages = page_count(first)
+        found = parse_attachments(first)
+        total = pages + len(found)
+
         thread_files: list[str] = []
         posts: list[dict] = []
-        for number in range(1, page_count(first) + 1):
+        for number in range(1, pages + 1):
+            progress(number - 1, total, f"Tải trang thread {number}/{pages}")
             html = first if number == 1 else session.get_html(f"{urlparse(url).path}?page={number}")
             name = f"thread-p{number}.html"
             (raw_dir / name).write_text(html, encoding="utf-8")
@@ -77,7 +95,8 @@ def crawl_thread(
             posts.extend({"author": post.author, "text": post.text} for post in parse_posts(html))
 
         attachments = []
-        for attachment in parse_attachments(first):
+        for done, attachment in enumerate(found, start=1):
+            progress(pages + done - 1, total, f"Tải ảnh và bình luận {done}/{len(found)}")
             try:
                 image_file = _download_image(session, exam_dir, attachment, skip=no_images)
                 media_file = _fetch_media(session, raw_dir, attachment)
