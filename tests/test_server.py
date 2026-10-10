@@ -10,8 +10,8 @@ from exam_practice.fetch import LoginRequired
 
 THREAD = "https://fuoverflow.com/threads/x.1/"
 HOSTED_TOKEN = "vercel_blob_rw_StoreAbc_secret"
-LOCAL = AppConfig(_env_file=None, blob_read_write_token=None)
-HOSTED = AppConfig(_env_file=None, blob_read_write_token=HOSTED_TOKEN)
+LOCAL = AppConfig(blob_read_write_token=None)
+HOSTED = AppConfig(blob_read_write_token=HOSTED_TOKEN)
 
 
 @pytest.fixture(autouse=True)
