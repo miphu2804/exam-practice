@@ -474,6 +474,7 @@
           </div>
           ${localCookie}
         </details>
+        <progress class="crawl-progress" id="crawl-progress" hidden></progress>
         <p class="crawl-status" id="crawl-status" role="status"></p>
       </form>`;
   }
@@ -490,28 +491,59 @@
       minutes: parseInt(field("minutes"), 10) || null,
       cookie: field("cookie"),
     };
+    const bar = $("#crawl-progress");
     button.disabled = true;
     status.dataset.tone = "";
-    status.textContent = "Đang crawl… mỗi ảnh một lượt tải, có thể mất 1–2 phút.";
+    status.textContent = "Đang mở thread…";
+    bar.removeAttribute("value"); // indeterminate until the thread's size is known
+    bar.hidden = false;
     try {
-      const response = await fetch("/api/crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+      const result = await streamCrawl(body, (event) => {
+        bar.max = event.total || 1;
+        bar.value = event.done;
+        status.textContent = `${event.label} · ${Math.round((event.done / (event.total || 1)) * 100)}%`;
       });
-      const result = await response.json().catch(() => null);
-      if (!response.ok || !result) {
-        throw new Error(typeof result?.detail === "string" ? result.detail : backendUnavailable(response.status));
-      }
+      bar.value = bar.max;
+      status.textContent = "Đang đối chiếu đáp án và lưu đề…";
       await loadIndex();
       const entry = state.index.find((e) => e.code === result.code);
       if (entry) return openExam(entry);
       renderPicker();
     } catch (error) {
+      bar.hidden = true;
       status.dataset.tone = "bad";
       status.textContent = error instanceof TypeError ? backendUnavailable() : error.message;
       button.disabled = false;
     }
+  }
+
+  /** POST the crawl and follow its NDJSON progress lines; resolves with the crawl summary. */
+  async function streamCrawl(body, onProgress) {
+    const response = await fetch("/api/crawl/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok || !response.body) {
+      const failure = await response.json().catch(() => null);
+      throw new Error(typeof failure?.detail === "string" ? failure.detail : backendUnavailable(response.status));
+    }
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines.filter(Boolean)) {
+        const event = JSON.parse(line);
+        if (event.result) return event.result;
+        if (event.error) throw new Error(event.error);
+        onProgress(event);
+      }
+    }
+    throw new Error("Crawl dừng giữa chừng, thử lại.");
   }
 
   function backendUnavailable(status) {

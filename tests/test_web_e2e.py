@@ -63,11 +63,21 @@ def crawls(exams):
 
 
 @pytest.fixture
-def site(exams, crawls):
-    def fake_crawl(entry, cookies):
+def crawl_gate():
+    """A crawl of a URL containing ``slow`` pauses half-way until the test sets this."""
+    return threading.Event()
+
+
+@pytest.fixture
+def site(exams, crawls, crawl_gate):
+    def fake_crawl(entry, cookies, progress):
         crawls.append((entry, cookies))
         if "login" in entry["url"]:
             raise LoginRequired("cookie hết hạn")
+        progress(0, 2, "Tải trang thread 1/1")
+        progress(1, 2, "Tải ảnh và bình luận 1/1")
+        if "slow" in entry["url"]:
+            crawl_gate.wait(10)
         data = write_exam(exams, "new-exam", entry["name"] or "new-exam", QUESTIONS[:1], entry["minutes"] or 45)
         build.write_index(exams)
         return data
@@ -207,6 +217,16 @@ def test_crawl_form_adds_exam_and_opens_it(page, crawls):
 
     page.click("#back")
     expect(page.locator(".exam-card")).to_have_count(2)
+
+
+def test_crawl_form_shows_progress_while_crawling(page, crawl_gate):
+    page.fill('#crawl input[name="url"]', "https://fuoverflow.com/threads/slow.3/")
+    page.click("#crawl button[type=submit]")
+    expect(page.locator("#crawl-progress")).to_be_visible()
+    expect(page.locator("#crawl-progress")).to_have_js_property("value", 1)
+    expect(page.locator("#crawl-status")).to_have_text("Tải ảnh và bình luận 1/1 · 50%")
+    crawl_gate.set()
+    expect(page.locator(".start h1")).to_be_visible()
 
 
 def test_empty_index_shows_only_the_crawl_form(page, exams):

@@ -108,6 +108,12 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Thanh tiến trình crawl + header mobile (2026-10-10):** `crawler` báo `progress(done,
+  total, label)` theo trang thread/ảnh; `POST /api/crawl/stream` trả NDJSON, web vẽ thanh
+  tiến trình + "Tải ảnh và bình luận 21/60 · 37%". Header làm bài trên điện thoại thành
+  hai hàng, không chồng nút từ 320px. Kiểm chứng: 80 test pass (2 API + 1 E2E mới).
+  Chưa kiểm chứng: stream trên Vercel và với crawl thật (cần cookie).
+
 - **Bố cục làm bài + trộn đề xoay vòng (2026-10-10, nhánh `feat/review-hub`):** trái là ảnh
   đề trong khung cao cố định (đổi câu không giật, kiểm: vị trí đáp án giữ nguyên qua 12 câu)
   + đáp án kèm số lượt chọn sau khi chấm; phải là lưới câu, Trước/Sau, ghi chú + nút **Lưu**.

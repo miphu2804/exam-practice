@@ -60,6 +60,7 @@ Web phục vụ ở hosted là CDN của Vercel (`outputDirectory: src/web`), kh
 | `GET /api/health` | `{status: "ok"}` — server đang chạy |
 | `GET /api/info` | `{hosted}` |
 | `POST /api/crawl` | body `{url, name?, minutes?, cookie?}` → crawl + build + (hosted: publish). Lỗi: `400` URL/crawl sai, `401` thiếu/hết cookie, `409` đang bận, `500` lỗi khác |
+| `POST /api/crawl/stream` | Cùng body; trả NDJSON: các dòng `{done, total, label}` (mỗi trang thread / mỗi ảnh), rồi `{result}` hoặc `{error, status}` với mã lỗi như trên. Link sai vẫn là `400` thường. Web dùng route này cho thanh tiến trình |
 | `PATCH /api/exams/{code}` | body `{title}` — đổi tên (local). Lỗi: `400` tên trống, `403` hosted, `404` không có đề, `409` đang bận |
 | `DELETE /api/exams/{code}` | xóa đề (local). Lỗi: `403` hosted, `404` không có đề, `409` đang bận |
 
