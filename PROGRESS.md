@@ -108,6 +108,12 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Deploy Vercel + nhớ cookie (2026-10-10):** project `exam-practice` trên Vercel
+  (https://exam-practice-eta.vercel.app), Blob store public, nối GitHub (push `main` →
+  production), tắt Vercel Authentication. Sửa `.vercelignore` (`exams/` → `/exams/`, trước
+  đó loại nhầm gói `exam_practice/exams`). Web hosted nhớ cookie `xf_user` trong localStorage.
+  Kiểm chứng: smoke test API trên production; 80 test pass. Chưa kiểm chứng: crawl thật trên Vercel.
+
 - **Thanh tiến trình crawl + header mobile (2026-10-10):** `crawler` báo `progress(done,
   total, label)` theo trang thread/ảnh; `POST /api/crawl/stream` trả NDJSON, web vẽ thanh
   tiến trình + "Tải ảnh và bình luận 21/60 · 37%". Header làm bài trên điện thoại thành
