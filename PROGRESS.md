@@ -108,6 +108,14 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Refactor backend (2026-10-10, nhánh `refactor/backend-layout`):** `server.py` +
+  `blobstore.py` → `main.py` (composition root) + `app_config.py` (pydantic-settings,
+  chỉ đọc biến môi trường, không `.env`) + gói `exams/` (schema, router, `ExamService`,
+  strategy `ExamStorage` = `LocalExamStorage` / `BlobExamStorage`). Hành vi HTTP giữ
+  nguyên (so 27 request cũ/mới khớp), thêm `GET /api/health`, log bằng `logging`,
+  `--serve` tự reload. Kiểm chứng: 76 test pass; clone mới + `uv sync` chạy được không
+  cần cấu hình.
+
 - **Theme sáng/tối, trộn đề, xáo câu, evidence + docs/ (2026-10-10):** token CSS
   dùng `light-dark()` (Tự động/Sáng/Tối, nút theme luôn trên header, bỏ gradient nền);
   **Trộn đề** ở kho đề (chọn ≥ 2 đề + số câu, câu mang `code`/`orig`, đánh số lại);
