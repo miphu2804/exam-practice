@@ -174,7 +174,14 @@ def _rebuild(args: argparse.Namespace) -> None:
 def _serve(args: argparse.Namespace) -> None:
     import uvicorn
 
-    uvicorn.run("exam_practice.main:app", host="127.0.0.1", port=args.port)
+    # Reload on code edits; exams/ is outside the watched package, so a crawl never restarts it.
+    uvicorn.run(
+        "exam_practice.main:app",
+        host="127.0.0.1",
+        port=args.port,
+        reload=True,
+        reload_dirs=[str(paths.SRC / "exam_practice")],
+    )
 
 
 def _hint(data: dict) -> None:
