@@ -12,6 +12,7 @@ dependencies = [
     "pycookiecheat>=0.8.0",
     "pillow>=12.3.0",
     "vercel>=0.11.6",
+    "pydantic-settings>=2.15.0",
 ]
 
 [project.scripts]

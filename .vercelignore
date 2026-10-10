@@ -6,3 +6,6 @@ node_modules/
 tests/
 .pytest_cache/
 *.log
+
+# Local secrets; hosted config comes from the Vercel project settings.
+.env

@@ -33,3 +33,6 @@ __pycache__/
 
 # Scratch
 .scratch/
+
+# Local environment overrides (secrets such as the Blob token).
+.env
