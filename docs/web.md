@@ -15,7 +15,8 @@ sau khi crawl lại. Đường dẫn ảnh: `../../exams/<code>/<image>` (`img(q
 
 | Hàm | Màn |
 |---|---|
-| `renderPicker` | Kho đề: ô crawl (`crawlForm`), thẻ đề (`examCard`), trộn đề (`mixForm`, khi ≥ 2 đề) |
+| `renderPicker` | Kho đề: ô crawl (`crawlForm`), thẻ đề (`examCard`), Ôn lại (`reviewHub`), trộn đề (`mixForm`, khi ≥ 2 đề) |
+| `renderBank` | Ôn lại câu sai / ghi chú gom từ mọi đề, luyện lại |
 | `renderStart` | Màn bắt đầu: thống kê, chế độ, thứ tự câu, thời gian, nút Ghi chú |
 | `renderQuiz` / `paint` | Làm bài: ảnh, đáp án, `feedback` + `evidence`, ghi chú, lưới câu |
 | `renderResult` / `reviewItem` | Kết quả + xem lại, lọc đúng/sai/chưa làm |
@@ -39,8 +40,8 @@ gốc) và đánh số lại `n = 1..N`. Vì thế **luôn dùng helper**, đừ
 
 ## Tính năng
 
-- **Trộn đề** (`submitMix`): nạp `data` của từng đề đã chọn, gộp, `shuffle`, cắt `count`,
-  đánh số lại. `state.data.code = "mix"`, `mixed = [codes]`, thời gian mặc định
+- **Trộn đề** (`submitMix`): `loadPool` nạp `data` của từng đề đã chọn, gộp, `shuffle`,
+  cắt `count`, `useMixed` đánh số lại. `state.data.code = "mix"`, `mixed = [codes]`, thời gian mặc định
   `max(5, ceil(count × 0.75))` phút.
 - **Xáo câu** (chip `data-order`): `start()` xáo `state.queue` (Fisher–Yates);
   `state.shuffled` làm lưới câu hiện số thứ tự thay vì số gốc (tooltip là `qLabel`).
@@ -49,6 +50,12 @@ gốc) và đánh số lại `n = 1..N`. Vì thế **luôn dùng helper**, đừ
 - **Ghi chú**: `localStorage["notes:<code>"] = {origNumber: text}`, mỗi trình duyệt
   một bản, không gửi lên server. Xuất/nhập là file JSON `{code: {n: text}}`, nhập thì
   gộp đè.
+- **Câu sai**: `localStorage["wrong:<code>"] = {origNumber: [letters]}`. `recordAttempt`
+  ghi khi chấm (luyện tập) hoặc khi nộp (thi thử): sai thì lưu lựa chọn, đúng thì xóa.
+  Nút "Đã nắm" (`forgetWrong`) xóa tay.
+- **Ôn lại** (`reviewHub` → `openBank`): thẻ "câu làm sai" / "câu có ghi chú" đếm trên mọi
+  đề trong index; mở thì nạp các câu đó thành một bộ trộn (`code` = `wrong`/`notes`) để xem
+  lại hoặc luyện.
 - **Theme**: `localStorage.theme` ∈ `"" | "light" | "dark"`; `applyTheme` đặt
   `data-theme` trên `<html>`. Mọi truy cập storage đều bọc `try` (chế độ riêng tư).
 

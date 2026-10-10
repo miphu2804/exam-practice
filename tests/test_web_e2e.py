@@ -580,3 +580,38 @@ def test_evidence_lists_comments_against_the_key(page):
     box.locator("summary").click()
     expect(box.locator('li[data-tone="agree"]')).to_have_count(5)
     expect(box.locator('li[data-tone="differ"] .ev-letters')).to_have_text("B")
+
+
+def test_review_hub_keeps_wrong_answers_until_answered_right(page):
+    hub = lambda kind: page.locator(f'.hub-card[data-bank="{kind}"]')
+    expect(hub("wrong")).to_be_disabled()
+
+    open_demo(page)
+    choice(page, "B").click()  # Q1 key is A
+    page.fill("#note", "xem lại")
+    page.click("#switch")
+    expect(hub("wrong").locator("b")).to_have_text("1")
+    expect(hub("notes").locator("b")).to_have_text("1")
+
+    hub("wrong").click()
+    expect(page.locator(".note-item")).to_have_count(1)
+    expect(page.locator(".note-item .mini.you")).to_have_text("lần trước: B")
+    expect(page.locator(".note-item .qnum")).to_have_text("Câu 1 · demo")
+    expect(page.locator(".note-item .evidence")).to_have_count(1)
+    page.click("#drill")
+    expect(page.locator("#counter")).to_have_text("01 / 1")
+    choice(page, "A").click()  # right this time: off the list
+    page.click("#switch")
+    expect(hub("wrong")).to_be_disabled()
+
+    # Exam mode records on submit; "Đã nắm" drops a question by hand.
+    open_demo(page, mode="Thi thử")
+    choice(page, "C").click()
+    page.click("#submit")
+    page.reload()
+    expect(hub("wrong").locator("b")).to_have_text("1")
+    hub("wrong").click()
+    page.click("[data-forget]")
+    expect(page.locator(".note-item")).to_have_count(0)
+    page.click("#back")
+    expect(hub("wrong")).to_be_disabled()

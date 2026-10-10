@@ -510,6 +510,30 @@ h2.qtext { font-size: clamp(1.25rem, 2.6vw, 1.7rem); letter-spacing: -0.01em; li
 .crawl-hint { margin: 0; color: var(--muted); font-size: 13px; }
 .crawl-hint code { font-family: var(--mono); color: var(--text); }
 
+/* -------------------------------------------------------------- review */
+.hub { display: grid; gap: 14px; margin-top: 40px; }
+.hub-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.hub-card {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.hub-card:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
+.hub-card:disabled { cursor: default; }
+.hub-card b { font-family: var(--mono); font-size: 26px; }
+.hub-card span { color: var(--muted); font-size: 14px; }
+.hub-card em { font-style: normal; font-family: var(--mono); font-size: 13px; color: var(--accent); margin-top: 6px; }
+.hub-card:disabled b { color: var(--faint); }
+.hub-card:disabled em { color: var(--faint); font-family: inherit; }
+
 /* ----------------------------------------------------------------- mix */
 .mix { margin-top: 40px; }
 .mix-list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }

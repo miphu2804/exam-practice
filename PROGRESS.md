@@ -108,6 +108,12 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Ôn lại câu sai + ghi chú (2026-10-10, nhánh `feat/review-hub`):** section **Ôn lại**
+  ở kho đề với hai thẻ "câu làm sai" / "câu có ghi chú", đếm trên mọi đề. Câu sai lưu ở
+  localStorage `wrong:<code>` (ghi khi chấm/nộp, đúng lại thì tự xóa, nút "Đã nắm" xóa
+  tay); mở thẻ ra danh sách kèm lựa chọn lần trước, đáp án, bình luận đối chiếu và
+  **Luyện N câu này**. Kiểm chứng: 77 test pass (1 E2E mới), ảnh chụp trên đề thật.
+
 - **Refactor backend (2026-10-10, nhánh `refactor/backend-layout`):** `server.py` +
   `blobstore.py` → `main.py` (composition root) + `app_config.py` (pydantic-settings,
   chỉ đọc biến môi trường, không `.env`) + gói `exams/` (schema, router, `ExamService`,

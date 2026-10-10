@@ -54,13 +54,21 @@
   /* --------------------------------------------------------------- notes */
   // Notes stay in this browser only (one key per exam), so every user keeps their own.
   const NOTES = "notes:";
-  function notesOf(code = state.code) {
+  function stored(key) {
     try {
-      return JSON.parse(localStorage.getItem(NOTES + code)) || {};
+      return JSON.parse(localStorage.getItem(key)) || {};
     } catch {
       return {};
     }
   }
+  function store(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* storage full or blocked: the change lives until the page closes */
+    }
+  }
+  const notesOf = (code = state.code) => stored(NOTES + code);
   const qLabel = (q) => (q.orig ? `Câu ${q.orig} · ${q.code}` : `Câu ${q.n}`);
   const origin = (q) => q.orig || q.n; // number in its own exam (mixed exams renumber)
   const noteOf = (q) => notesOf(examOf(q))[origin(q)] || "";
@@ -69,11 +77,26 @@
     const notes = notesOf(examOf(q));
     if (text.trim()) notes[origin(q)] = text;
     else delete notes[origin(q)];
-    try {
-      localStorage.setItem(NOTES + examOf(q), JSON.stringify(notes));
-    } catch {
-      /* storage full or blocked: the note lives until the page closes */
-    }
+    store(NOTES + examOf(q), notes);
+  }
+
+  /* ----------------------------------------------------------- wrong bank */
+  // Questions last answered wrong, per exam and per browser: {origNumber: [letters picked]}.
+  // Answering one right later takes it off the list.
+  const WRONG = "wrong:";
+  const wrongOf = (code) => stored(WRONG + code);
+  function recordAttempt(n) {
+    const q = question(n);
+    if (!keyOf(q).length || !chosen(n).size) return; // no key or skipped: nothing to learn from
+    const wrong = wrongOf(examOf(q));
+    if (isCorrect(n)) delete wrong[origin(q)];
+    else wrong[origin(q)] = [...chosen(n)].sort();
+    store(WRONG + examOf(q), wrong);
+  }
+  function forgetWrong(q) {
+    const wrong = wrongOf(examOf(q));
+    delete wrong[origin(q)];
+    store(WRONG + examOf(q), wrong);
   }
 
   /* ------------------------------------------------------------- loading */
@@ -182,8 +205,12 @@
         ${crawlForm()}
         <p class="picker-status" id="picker-status" role="status"></p>
         <div class="exam-grid">${state.index.map(examCard).join("")}</div>
+        ${state.index.length ? reviewHub() : ""}
         ${state.index.length >= 2 ? mixForm() : ""}
       </section>`;
+    document.querySelectorAll(".hub-card").forEach((card) =>
+      card.addEventListener("click", () => openBank(card.dataset.bank))
+    );
     document.querySelectorAll(".exam-card").forEach((card, i) => {
       const entry = state.index[i];
       card.querySelector(".exam-main").addEventListener("click", () => openExam(entry));
@@ -231,24 +258,37 @@
       status.textContent = "Chọn ít nhất 2 đề để trộn.";
       return;
     }
-    const pool = [];
-    for (const code of codes) {
-      const data = await loadJson(EXAMS + code + "/data.js", "EXAM_DATA");
-      // Each question keeps its exam folder, its own number and that exam's crop box.
-      for (const q of data?.questions || []) pool.push({ ...q, code, orig: q.n, view: data.view });
-    }
+    const pool = await loadPool(codes);
     if (!pool.length) {
       status.textContent = "Các đề đã chọn chưa có câu hỏi.";
       return;
     }
     const count = Math.min(pool.length, parseInt(form.elements.count.value, 10) || pool.length);
-    const questions = shuffle(pool).slice(0, count).map((q, i) => ({ ...q, n: i + 1 }));
-    state.code = "mix";
+    useMixed("mix", "Trộn đề", `Trộn ${count} câu từ ${codes.length} đề`, codes, shuffle(pool).slice(0, count));
+    renderStart();
+  }
+
+  /** Questions of several exams; each keeps its exam folder, its own number and that exam's crop box. */
+  async function loadPool(codes, keep = () => true) {
+    const pool = [];
+    for (const code of codes) {
+      const data = await loadJson(EXAMS + code + "/data.js", "EXAM_DATA");
+      for (const q of data?.questions || []) {
+        if (keep(code, q.n)) pool.push({ ...q, code, orig: q.n, view: data.view });
+      }
+    }
+    return pool;
+  }
+
+  /** Make a cross-exam set the current "exam", renumbered 1..N. */
+  function useMixed(code, brand, title, codes, pool) {
+    const questions = pool.map((q, i) => ({ ...q, n: i + 1 }));
+    state.code = code;
     state.data = {
-      code: "mix",
-      title: `Trộn ${count} câu từ ${codes.length} đề`,
+      code,
+      title,
       mixed: codes,
-      default_duration_min: Math.max(5, Math.ceil(count * 0.75)),
+      default_duration_min: Math.max(5, Math.ceil(questions.length * 0.75)),
       stats: {
         answered: questions.filter((q) => keyOf(q).length).length,
         multi: questions.filter((q) => q.multi).length,
@@ -256,10 +296,94 @@
       },
       questions,
     };
-    document.title = "Trộn đề · Luyện đề";
-    $("#brand").innerHTML = "<b>Trộn đề</b>";
+    document.title = `${brand} · Luyện đề`;
+    $("#brand").innerHTML = `<b>${esc(brand)}</b>`;
     $("#foot-meta").textContent = codes.join(" + ");
-    renderStart();
+  }
+
+  /* --------------------------------------------------------------- review */
+  // Review banks gather, from every exam, the questions this browser remembers.
+  const BANKS = {
+    wrong: {
+      of: wrongOf,
+      title: "Câu sai",
+      label: "câu làm sai",
+      none: "Chưa có câu sai",
+      hint: "Câu trả lời sai được lưu khi chấm; làm đúng lại thì tự bỏ khỏi danh sách.",
+    },
+    notes: {
+      of: notesOf,
+      title: "Ghi chú",
+      label: "câu có ghi chú",
+      none: "Chưa có ghi chú",
+      hint: "Ghi chú được viết ngay dưới mỗi câu khi làm bài.",
+    },
+  };
+  const bankSize = (kind) => state.index.reduce((sum, e) => sum + Object.keys(BANKS[kind].of(e.code)).length, 0);
+
+  function reviewHub() {
+    const cards = Object.entries(BANKS).map(([kind, bank]) => {
+      const size = bankSize(kind);
+      return `
+        <button class="hub-card" data-bank="${kind}" ${size ? "" : "disabled"}>
+          <b>${size}</b>
+          <span>${bank.label}</span>
+          <em>${size ? "Xem lại →" : esc(bank.hint)}</em>
+        </button>`;
+    });
+    return `
+      <section class="hub" aria-label="Ôn lại">
+        <div class="crawl-head">
+          <b>Ôn lại</b>
+          <span>Gom từ mọi đề; chỉ lưu trên trình duyệt này.</span>
+        </div>
+        <div class="hub-grid">${cards.join("")}</div>
+      </section>`;
+  }
+
+  async function openBank(kind) {
+    const bank = BANKS[kind];
+    const marks = Object.fromEntries(state.index.map((e) => [e.code, bank.of(e.code)]));
+    const codes = Object.keys(marks).filter((code) => Object.keys(marks[code]).length);
+    const pool = await loadPool(codes, (code, n) => n in marks[code]);
+    useMixed(kind, bank.title, `Ôn lại · ${bank.title}`, codes, pool);
+    renderBank(kind);
+  }
+
+  /** The questions of one review bank with answer, comments and note; drill them or drop one. */
+  function renderBank(kind) {
+    quizChrome(false);
+    const bank = BANKS[kind];
+    const items = state.data.questions;
+    $("#app").innerHTML = `
+      <section class="screen-enter">
+        <div class="result-head">
+          <div>
+            <p class="eyebrow">Ôn lại · ${bank.title}</p>
+            <h1 class="picker-title">${items.length ? `${items.length} ${bank.label}` : bank.none}</h1>
+          </div>
+          <div class="actions" style="margin:0">
+            <button class="btn primary" id="drill" ${items.length ? "" : "disabled"}>Luyện ${items.length} câu này</button>
+            <button class="btn ghost" id="back">← Kho đề</button>
+          </div>
+        </div>
+        ${items.length ? "" : `<p class="review-none">${esc(bank.hint)}</p>`}
+        <div class="review">${items.map((q) => noteItem(q, kind === "wrong")).join("")}</div>
+      </section>`;
+    document.querySelectorAll(".note-item textarea").forEach((area) =>
+      area.addEventListener("input", () => saveNote(question(Number(area.dataset.n)), area.value))
+    );
+    document.querySelectorAll("[data-forget]").forEach((button) =>
+      button.addEventListener("click", () => {
+        forgetWrong(question(Number(button.dataset.forget)));
+        button.closest(".note-item").remove();
+      })
+    );
+    $("#drill").addEventListener("click", () =>
+      start(Math.max(1, Math.ceil(items.length * 1.5)), items.map((q) => q.n), state.mode)
+    );
+    $("#back").addEventListener("click", () => { state.data = null; renderPicker(); });
+    window.scrollTo(0, 0);
   }
 
   async function renameExam(entry) {
@@ -557,7 +681,9 @@
     renderNotes();
   }
 
-  function noteItem(q) {
+  /** A question with its note; ``wrong`` adds the last wrong pick, the comments and a way to drop it. */
+  function noteItem(q, wrong = false) {
+    const picked = wrong ? wrongOf(examOf(q))[origin(q)] : null;
     return `
       <article class="review-item note-item">
         <div>${q.image ? shot(q, "lazy") : ""}</div>
@@ -567,8 +693,11 @@
             <span class="review-links">${traceLinks(q)}</span>
           </div>
           <div class="mini-choices">
+            ${picked ? `<span class="mini you">lần trước: ${esc(fmt(picked))}</span>` : ""}
             <span class="mini key">đáp án: ${esc(fmt(keyOf(q)) || "chưa có")}</span>
+            ${wrong ? `<button class="link-btn" data-forget="${q.n}">Đã nắm, bỏ khỏi danh sách</button>` : ""}
           </div>
+          ${wrong ? evidence(q) : ""}
           <textarea class="note-input" data-n="${q.n}" rows="4" aria-label="Ghi chú câu ${q.n}">${esc(noteOf(q))}</textarea>
         </div>
       </article>`;
@@ -793,7 +922,10 @@
       picked = picked.has(letter) && picked.size === 1 ? new Set() : new Set([letter]);
     }
     state.answers.set(n, picked);
-    if (state.mode === "practice" && !q.multi && picked.size) state.checked.add(n);
+    if (state.mode === "practice" && !q.multi && picked.size) {
+      state.checked.add(n);
+      recordAttempt(n);
+    }
     paint();
   }
 
@@ -801,6 +933,7 @@
     const n = state.queue[state.i];
     if (!chosen(n).size) return;
     state.checked.add(n);
+    recordAttempt(n);
     paint();
   }
 
@@ -865,6 +998,8 @@
     if (state.finished) return;
     state.finished = true;
     stopTimer();
+    // Practice mode already recorded each checked answer; exam mode grades everything now.
+    if (state.mode === "exam") state.queue.forEach(recordAttempt);
     renderResult(auto);
   }
 
