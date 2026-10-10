@@ -108,6 +108,12 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Bố cục làm bài + trộn đề xoay vòng (2026-10-10, nhánh `feat/review-hub`):** trái là ảnh
+  đề trong khung cao cố định (đổi câu không giật, kiểm: vị trí đáp án giữ nguyên qua 12 câu)
+  + đáp án kèm số lượt chọn sau khi chấm; phải là lưới câu, Trước/Sau, ghi chú + nút **Lưu**.
+  Kết quả có nút **← Kho đề**. Trộn đề ưu tiên câu chưa gặp (`mix:seen`), 4 lượt × 20 câu
+  không trùng; "Làm lại" đề trộn bốc bộ mới. Kiểm chứng: 77 test pass, ảnh chụp sáng/tối/mobile.
+
 - **Ôn lại câu sai + ghi chú (2026-10-10, nhánh `feat/review-hub`):** section **Ôn lại**
   ở kho đề với hai thẻ "câu làm sai" / "câu có ghi chú", đếm trên mọi đề. Câu sai lưu ở
   localStorage `wrong:<code>` (ghi khi chấm/nộp, đúng lại thì tự xóa, nút "Đã nắm" xóa

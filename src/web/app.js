@@ -258,15 +258,38 @@
       status.textContent = "Chọn ít nhất 2 đề để trộn.";
       return;
     }
-    const pool = await loadPool(codes);
-    if (!pool.length) {
+    if (!(await newMix(codes, parseInt(form.elements.count.value, 10)))) {
       status.textContent = "Các đề đã chọn chưa có câu hỏi.";
       return;
     }
-    const count = Math.min(pool.length, parseInt(form.elements.count.value, 10) || pool.length);
-    useMixed("mix", "Trộn đề", `Trộn ${count} câu từ ${codes.length} đề`, codes, shuffle(pool).slice(0, count));
     renderStart();
   }
+
+  async function newMix(codes, count) {
+    const pool = await loadPool(codes);
+    if (!pool.length) return false;
+    count = Math.min(pool.length, count || pool.length);
+    useMixed("mix", "Trộn đề", `Trộn ${count} câu từ ${codes.length} đề`, codes, drawMix(pool, count));
+    return true;
+  }
+
+  /**
+   * Draw ``count`` questions, unseen ones first: independent draws keep bringing back
+   * questions from the last run, so ``mix:seen`` rotates through the whole pool before
+   * any question repeats.
+   */
+  function drawMix(pool, count) {
+    const id = (q) => `${q.code}:${q.orig}`;
+    let seen = new Set(Object.values(stored(SEEN)));
+    const fresh = shuffle(pool.filter((q) => !seen.has(id(q))));
+    const picked = [...fresh, ...shuffle(pool.filter((q) => seen.has(id(q))))].slice(0, count);
+    if (fresh.length <= count) seen = new Set(); // pool used up: this draw starts the next round
+    picked.forEach((q) => seen.add(id(q)));
+    store(SEEN, [...seen]);
+    return shuffle(picked);
+  }
+
+  const SEEN = "mix:seen";
 
   /** Questions of several exams; each keeps its exam folder, its own number and that exam's crop box. */
   async function loadPool(codes, keep = () => true) {
@@ -736,26 +759,35 @@
           <div class="qhead"><span class="qnum" id="qnum"></span><span id="qtag"></span></div>
           <div class="image-pane" id="image-pane"></div>
           <div class="choices" id="choices" role="group" aria-label="Chọn đáp án"></div>
-          <div id="feedback"></div>
           <div class="qactions" id="actions"></div>
-          <textarea class="note-input" id="note" rows="2" placeholder="Ghi chú cho câu này (chỉ lưu trên trình duyệt của bạn)" aria-label="Ghi chú"></textarea>
-          <div class="qnav">
-            <button class="btn ghost" id="prev">← Trước</button>
-            <span class="spacer"></span>
-            <button class="btn" id="next">Sau →</button>
-          </div>
+          <div id="feedback"></div>
         </div>
         <aside class="quiz-side">
           <p class="eyebrow">Câu hỏi</p>
           <div class="dots" id="dots" aria-label="Danh sách câu"></div>
+          <div class="qnav">
+            <button class="btn ghost" id="prev">← Trước</button>
+            <button class="btn" id="next">Sau →</button>
+          </div>
+          <textarea class="note-input" id="note" rows="5" placeholder="Ghi chú cho câu này (chỉ lưu trên trình duyệt của bạn)" aria-label="Ghi chú"></textarea>
+          <div class="note-bar">
+            <span class="note-status" id="note-status" role="status"></span>
+            <button class="btn" id="note-save">Lưu</button>
+          </div>
         </aside>
       </section>`;
     $("#prev").addEventListener("click", () => goto(state.i - 1));
     $("#next").addEventListener("click", () => (state.i === state.queue.length - 1 ? finish() : goto(state.i + 1)));
-    $("#note").addEventListener("input", (event) => {
-      saveNote(question(state.queue[state.i]), event.target.value);
+    // Notes save on every keystroke; the button is an explicit confirmation for the reader.
+    const keepNote = (status) => {
+      saveNote(question(state.queue[state.i]), $("#note").value);
+      $("#note-status").textContent = status;
       paintDots();
-    });
+    };
+    $("#note").addEventListener("input", () => keepNote("Đã tự lưu"));
+    $("#note-save").addEventListener("click", () =>
+      keepNote(`Đã lưu lúc ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`)
+    );
     paint();
   }
 
@@ -776,7 +808,7 @@
       const trace = links ? `<div class="trace-row">${links}</div>` : "";
       if (q.image) {
         pane.classList.remove("missing");
-        pane.innerHTML = `${shot(q)}${trace}`;
+        pane.innerHTML = `<div class="frame">${shot(q)}</div>${trace}`;
         pane.classList.remove("q-enter");
         void pane.offsetWidth;
         pane.classList.add("q-enter");
@@ -785,6 +817,7 @@
         pane.innerHTML = trace;
       }
       $("#note").value = noteOf(q);
+      $("#note-status").textContent = "";
     }
 
     const letters = q.choices?.length ? q.choices : ["A", "B", "C", "D"];
@@ -794,6 +827,7 @@
         const mark = shown ? (key.includes(c) ? "correct" : picked.has(c) ? "wrong" : "") : "";
         return `<button class="choice" data-c="${c}" aria-pressed="${picked.has(c)}" data-state="${mark}" ${shown ? "disabled" : ""}>
              <span class="key">${c}</span>
+             ${shown ? `<span class="votes">${q.letter_votes?.[c] || 0} lượt</span>` : ""}
            </button>`;
       })
       .join("");
@@ -825,7 +859,7 @@
       ? `width:${(v.width / v.w) * 100}%;left:${(-v.x / v.w) * 100}%;top:${(-v.y / v.h) * 100}%`
       : "";
     return `<a class="shot ${v ? "cropped" : ""}" href="${src}" target="_blank" rel="noopener" title="Mở ảnh gốc"
-        ${v ? `style="aspect-ratio:${v.w}/${v.h}"` : ""}>
+        ${v ? `style="aspect-ratio:${v.w}/${v.h};--ratio:${v.w / v.h}"` : ""}>
         <img src="${src}" alt="Câu ${q.n}" loading="${loading}" style="${style}" /></a>`;
   }
 
@@ -850,7 +884,6 @@
           <span class="mini you">bạn: ${esc(yours)}</span>
           <span class="mini key">đáp án: ${esc(fmt(key) || "chưa có")}</span>
         </div>
-        ${voteBars(q)}
         ${evidence(q)}
       </div>`;
   }
@@ -1031,6 +1064,7 @@
             <div class="score"><b>${correct}</b><span>/ ${total} câu đúng · ${pct}%</span></div>
           </div>
           <div class="actions" style="margin:0">
+            <button class="btn ghost" id="home">← Kho đề</button>
             <button class="btn" id="retry-wrong" ${wrong.length ? "" : "disabled"}>Ôn ${wrong.length} câu sai</button>
             <button class="btn primary" id="again">Làm lại</button>
           </div>
@@ -1045,7 +1079,14 @@
       chip.addEventListener("click", () => filterReview(chip.dataset.filter))
     );
 
-    $("#again").addEventListener("click", renderStart);
+    $("#again").addEventListener("click", async () => {
+      if (state.code === "mix") await newMix(state.data.mixed, state.data.questions.length);
+      renderStart();
+    });
+    $("#home").addEventListener("click", () => {
+      state.data = null;
+      renderPicker();
+    });
     $("#retry-wrong").addEventListener("click", () => {
       wrong.forEach((n) => state.answers.delete(n));
       start(Math.max(1, Math.ceil(wrong.length * 1.5)), wrong, state.mode);

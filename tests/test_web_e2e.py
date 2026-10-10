@@ -312,7 +312,7 @@ def test_practice_mode_grades_each_question_immediately(page):
     expect(choice(page, "A")).to_have_attribute("data-state", "correct")
     expect(choice(page, "C")).to_be_disabled()
     expect(dot(page, 1)).to_have_attribute("data-ok", "false")
-    expect(page.locator("#feedback .vote-row.is-answer")).to_contain_text("A")
+    expect(choice(page, "A").locator(".votes")).to_contain_text("lượt")
 
     # Q2: reveal without answering.
     page.click("#next")
@@ -589,6 +589,8 @@ def test_review_hub_keeps_wrong_answers_until_answered_right(page):
     open_demo(page)
     choice(page, "B").click()  # Q1 key is A
     page.fill("#note", "xem lại")
+    page.click("#note-save")
+    expect(page.locator("#note-status")).to_contain_text("Đã lưu lúc")
     page.click("#switch")
     expect(hub("wrong").locator("b")).to_have_text("1")
     expect(hub("notes").locator("b")).to_have_text("1")
@@ -608,7 +610,7 @@ def test_review_hub_keeps_wrong_answers_until_answered_right(page):
     open_demo(page, mode="Thi thử")
     choice(page, "C").click()
     page.click("#submit")
-    page.reload()
+    page.click("#home")
     expect(hub("wrong").locator("b")).to_have_text("1")
     hub("wrong").click()
     page.click("[data-forget]")
