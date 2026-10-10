@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi" data-theme="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Luyện đề · exam-practice</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar" hidden>
+    <div class="shell topbar-inner">
+      <span class="brand" id="brand"></span>
+      <span class="counter" id="counter"></span>
+      <span class="spacer"></span>
+      <span class="clock" id="clock" aria-live="off">--:--</span>
+      <button class="btn icon ghost" id="pause" title="Tạm dừng (P)">Tạm dừng</button>
+      <button class="btn icon ghost" id="submit" title="Nộp bài">Nộp bài</button>
+      <button class="btn icon ghost" id="switch" title="Đổi đề" hidden>Đổi đề</button>
+      <button class="btn icon ghost" id="theme" title="Đổi giao diện sáng/tối" aria-label="Đổi giao diện">◐</button>
+    </div>
+    <div class="timebar" id="timebar"><i></i></div>
+  </header>
+
+  <main class="shell" id="app"></main>
+
+  <footer class="footer">
+    <div class="shell">
+      <span>Dữ liệu đề và đáp án lấy từ FuOverflow. Đáp án được đối chiếu theo bình chọn nhiều nhất.</span>
+      <span class="mono" id="foot-meta"></span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
