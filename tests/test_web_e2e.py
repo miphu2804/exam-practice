@@ -23,8 +23,8 @@ playwright = pytest.importorskip("playwright.sync_api")
 expect = playwright.expect
 
 THREAD = "https://fuoverflow.com/threads/demo.1/"
-LOCAL = AppConfig(blob_read_write_token=None)
-HOSTED = AppConfig(blob_read_write_token="vercel_blob_rw_StoreAbc_secret")
+LOCAL = AppConfig(blob_read_write_token=None, fuoverflow_cookie=None)
+HOSTED = AppConfig(blob_read_write_token="vercel_blob_rw_StoreAbc_secret", fuoverflow_cookie=None)
 # n, answer, votes; question 3 takes two answers, question 4 has no answer key.
 QUESTIONS = [(1, ["A"], {"A": 5, "B": 1}), (2, ["C"], {"C": 4}), (3, ["B", "D"], {"B": 3, "D": 3}), (4, [], {})]
 

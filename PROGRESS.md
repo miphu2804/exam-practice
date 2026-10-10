@@ -108,6 +108,10 @@ Cập nhật: 2026-10-09
   (5 API hosted, 2 E2E mới); ảnh chụp headless quiz + màn ghi chú trên đề thật.
   Chưa kiểm chứng: deploy thật lên Vercel, Blob thật, FuOverflow có chặn IP Vercel không.
 
+- **Cookie chung cho bản hosted (2026-10-10):** biến `FUOVERFLOW_COOKIE` → crawl hosted dùng
+  tài khoản chung khi người dùng không dán cookie; `/api/info` thêm `needs_cookie`, web ẩn ô
+  cookie bắt buộc khi không cần. Kiểm chứng: 81 test pass.
+
 - **Deploy Vercel + nhớ cookie (2026-10-10):** project `exam-practice` trên Vercel
   (https://exam-practice-eta.vercel.app), Blob store public, nối GitHub (push `main` →
   production), tắt Vercel Authentication. Sửa `.vercelignore` (`exams/` → `/exams/`, trước

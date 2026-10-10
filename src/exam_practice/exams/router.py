@@ -48,7 +48,7 @@ def health() -> HealthResponse:
 
 @api_router.get("/info", response_model=InfoResponse)
 def info(request: Request) -> InfoResponse:
-    return InfoResponse(hosted=request.app.state.hosted)
+    return InfoResponse(hosted=request.app.state.hosted, needs_cookie=request.app.state.needs_visitor_cookie)
 
 
 @api_router.post("/crawl", response_model=CrawlResponse)

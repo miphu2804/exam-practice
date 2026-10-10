@@ -36,11 +36,14 @@ Cấu hình chỉ đọc từ biến môi trường (`app_config.py`, pydantic-s
 | Biến | Ý nghĩa |
 |---|---|
 | `BLOB_READ_WRITE_TOKEN` | Có → chế độ hosted. Store id là trường thứ 4 (tách `_`) của token, dùng dựng URL public |
+| `FUOVERFLOW_COOKIE` | Giá trị `xf_user` của một tài khoản FuOverflow dùng chung. Có → người dùng chỉ dán link, crawl bằng tài khoản này (ai dán cookie riêng thì dùng cookie đó). Không có → ô cookie bắt buộc |
 | `LOG__LEVEL` | Mức log của `logging` (mặc định `INFO`: bắt đầu/xong crawl, báo cáo build, traceback khi lỗi 500) |
 | `VERCEL` | Vercel tự đặt → `paths.EXAMS = /tmp/exams` |
 
 ## Giới hạn khi hosted (biết trước, chưa xử lý)
 
+- Có `FUOVERFLOW_COOKIE` thì ai mở trang cũng crawl được bằng tài khoản chung: FuOverflow có
+  thể khoá tài khoản đó nếu crawl quá nhiều; cookie hết hạn thì đặt lại biến và redeploy.
 - Ảnh đề trên Blob là **public** (ai có URL đều xem được).
 - Crawl lại ghi đè cùng đường dẫn; CDN của Blob có thể trả bản cũ tối đa 60 s
   (`MAX_AGE_SECONDS` trong `exams/blob_storage.py`).

@@ -136,10 +136,11 @@
     }
     applyTheme(theme in THEMES ? theme : "");
     bindChrome();
-    state.hosted = await fetch("/api/info")
+    const info = await fetch("/api/info")
       .then((response) => (response.ok ? response.json() : {}))
-      .then((info) => Boolean(info.hosted))
-      .catch(() => false);
+      .catch(() => ({}));
+    state.hosted = Boolean(info.hosted);
+    state.needsCookie = Boolean(info.needs_cookie);
     await loadIndex();
     renderPicker();
   }
@@ -443,18 +444,18 @@
   }
 
   function crawlForm() {
-    // Hosted: the server has no login of its own, so each user crawls with their own cookie.
-    const cookie = state.hosted
+    // Hosted without a shared FUOVERFLOW_COOKIE: each user crawls with their own cookie.
+    const cookie = state.needsCookie
       ? `<div class="crawl-row">
           <input name="cookie" type="password" autocomplete="off" required placeholder="Cookie xf_user FuOverflow của bạn" aria-label="Cookie xf_user" value="${esc(savedCookie())}" />
         </div>
         <label class="crawl-remember"><input type="checkbox" name="remember" checked /> Nhớ cookie trên trình duyệt này để lần sau chỉ cần dán link</label>
         <p class="crawl-hint">Lấy cookie: đăng nhập fuoverflow.com → DevTools (F12) → Application → Cookies → copy giá trị <code>xf_user</code>. Server chỉ dùng cookie cho lượt crawl, không lưu; nếu chọn nhớ thì cookie nằm trong trình duyệt của bạn.</p>`
       : "";
-    const localCookie = state.hosted
+    const localCookie = state.needsCookie
       ? ""
       : `<div class="crawl-row">
-            <input name="cookie" type="password" autocomplete="off" placeholder="Cookie xf_user (bỏ trống: tự lấy từ Chrome)" aria-label="Cookie xf_user" />
+            <input name="cookie" type="password" autocomplete="off" placeholder="Cookie xf_user (${state.hosted ? "bỏ trống: dùng tài khoản chung của site" : "bỏ trống: tự lấy từ Chrome"})" aria-label="Cookie xf_user" />
           </div>`;
     return `
       <form class="crawl" id="crawl">

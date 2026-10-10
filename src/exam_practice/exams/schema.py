@@ -35,6 +35,7 @@ class DeleteResponse(BaseModel):
 
 class InfoResponse(BaseModel):
     hosted: bool
+    needs_cookie: bool
 
 
 class HealthResponse(BaseModel):

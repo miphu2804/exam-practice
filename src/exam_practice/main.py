@@ -37,7 +37,10 @@ def create_app(configuration: AppConfig = app_config, crawl_exam: CrawlExam = cr
     app = FastAPI(title="exam-practice")
     app.state.hosted = configuration.hosted
     app.state.exam_storage = storage
-    app.state.exam_service = ExamService(storage=storage, crawl_exam=crawl_exam, cookie_file=paths.COOKIES)
+    app.state.needs_visitor_cookie = configuration.needs_visitor_cookie
+    app.state.exam_service = ExamService(
+        storage=storage, crawl_exam=crawl_exam, cookie_file=paths.COOKIES, shared_cookie=configuration.fuoverflow_cookie
+    )
     app.include_router(api_router)
     if configuration.hosted:
         app.include_router(blob_files_router)

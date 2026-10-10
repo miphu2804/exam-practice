@@ -28,7 +28,7 @@ uv run pytest -q --ignore tests/test_web_e2e.py   # chỉ unit, nhanh
 ## Quy ước
 
 - I/O nằm ở `fetch.py`, `crawler.py`, `exams/blob_storage.py`, `exams/local_storage.py`, `main.py` + `exams/router.py` (local chỉ nghe 127.0.0.1;
-  có `BLOB_READ_WRITE_TOKEN` là chế độ hosted Vercel: cookie bắt buộc từ người dùng, đề trong Blob, cấm đổi tên/xóa); `parse.py` và `build.py` thuần/không mạng
+  có `BLOB_READ_WRITE_TOKEN` là chế độ hosted Vercel: crawl bằng `FUOVERFLOW_COOKIE` chung hoặc cookie người dùng dán, đề trong Blob, cấm đổi tên/xóa); `parse.py` và `build.py` thuần/không mạng
   để chạy lại trên raw và test bằng fixture.
 - Web tĩnh, không build step (Vite chỉ là dev server, proxy `/api` + `/exams`); ảnh tham chiếu bằng đường dẫn tương đối từ
   `exams/<code>/` (app tiền tố `../../exams/<code>/`).

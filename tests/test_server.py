@@ -12,8 +12,9 @@ from exam_practice.fetch import LoginRequired
 
 THREAD = "https://fuoverflow.com/threads/x.1/"
 HOSTED_TOKEN = "vercel_blob_rw_StoreAbc_secret"
-LOCAL = AppConfig(blob_read_write_token=None)
-HOSTED = AppConfig(blob_read_write_token=HOSTED_TOKEN)
+LOCAL = AppConfig(blob_read_write_token=None, fuoverflow_cookie=None)
+HOSTED = AppConfig(blob_read_write_token=HOSTED_TOKEN, fuoverflow_cookie=None)
+SHARED = AppConfig(blob_read_write_token=HOSTED_TOKEN, fuoverflow_cookie="site-login")
 
 
 @pytest.fixture(autouse=True)
@@ -151,8 +152,10 @@ def test_health_reports_ok():
 
 
 def test_info_reports_mode():
-    assert client(lambda entry, cookies: {}).get("/api/info").json() == {"hosted": False}
-    assert hosted_client(lambda entry, cookies: {}).get("/api/info").json() == {"hosted": True}
+    assert client(lambda entry, cookies: {}).get("/api/info").json() == {"hosted": False, "needs_cookie": False}
+    assert hosted_client(lambda entry, cookies: {}).get("/api/info").json() == {"hosted": True, "needs_cookie": True}
+    shared = TestClient(main.create_app(SHARED, lambda entry, cookies: {}))
+    assert shared.get("/api/info").json() == {"hosted": True, "needs_cookie": False}
 
 
 def test_hosted_crawl_requires_the_visitors_own_cookie():
@@ -161,6 +164,20 @@ def test_hosted_crawl_requires_the_visitors_own_cookie():
     assert response.status_code == 401
     assert "cookie" in response.json()["detail"]
     assert calls == []  # never falls back to cookies.txt or the server's Chrome
+
+
+def test_hosted_crawl_uses_the_shared_cookie_unless_the_visitor_pastes_one(monkeypatch):
+    monkeypatch.setattr(BlobExamStorage, "save", lambda self, entry, data: None)
+    calls = []
+
+    def crawl_exam(entry, cookies, progress):
+        calls.append(cookies)
+        return crawled()
+
+    shared = TestClient(main.create_app(SHARED, crawl_exam))
+    assert shared.post("/api/crawl", json={"url": THREAD}).status_code == 200
+    assert shared.post("/api/crawl", json={"url": THREAD, "cookie": "mine"}).status_code == 200
+    assert calls == [{"xf_user": "site-login"}, {"xf_user": "mine"}]
 
 
 def test_hosted_crawl_publishes_and_cleans_tmp(exams, monkeypatch):
